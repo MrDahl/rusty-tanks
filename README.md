@@ -1,5 +1,7 @@
 # Rusty Tanks
-
+<p align="left">
+  <img src="assets/tanks_logo.svg" alt="Rusty Tanks by Marc Sonne Dahl" width="200">
+</p>
 A two-player artillery game for the browser, inspired by classic tank games. Built from a clean slate: all code is original.
 
 Play it: https://mrdahl.github.io/rusty-tanks/
