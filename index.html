@@ -26,14 +26,47 @@
       text-transform: uppercase;
     }
     /* The game screen scales to fit any window */
-    #screen {
+    #stage {
+      position: relative;
       width: min(96vw, 960px);
+    }
+    #screen {
+      display: block;
+      width: 100%;
       height: auto;
       aspect-ratio: 960 / 540;
       background: #000;
       border: 3px solid #5a3a2a;
       border-radius: 4px;
+      box-sizing: border-box;
     }
+    /* The main menu sits on top of the game screen */
+    #menu {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(20, 12, 10, 0.85);
+      border-radius: 4px;
+    }
+    #menu.hidden { display: none; }
+    .panel { text-align: center; padding: 12px; max-width: 100%; box-sizing: border-box; }
+    .panel h2 { margin: 0 0 4px; font-size: clamp(28px, 6vw, 52px); letter-spacing: 6px; color: #d9a441; text-transform: uppercase; }
+    .panel .tag { margin: 0 0 clamp(8px, 2.5vw, 22px); color: #b9a88c; font-size: clamp(11px, 2vw, 15px); }
+    .panel .sub { margin: clamp(6px, 1.6vw, 14px) 0 6px; color: #f2e6d0; font-size: clamp(12px, 2vw, 16px); }
+    .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    button.choice {
+      background: #3a2a24;
+      color: #f2e6d0;
+      border: 2px solid #5a3a2a;
+      font-size: clamp(12px, 2.2vw, 16px);
+      padding: clamp(5px, 1.2vw, 10px) clamp(10px, 2.4vw, 20px);
+      min-width: clamp(90px, 18vw, 150px);
+    }
+    button.choice small { display: block; font-weight: normal; color: #b9a88c; font-size: 0.8em; }
+    button.choice.selected { border-color: #d9a441; background: #5a3a2a; color: #d9a441; }
+    button.start { margin-top: clamp(10px, 2.5vw, 22px); font-size: clamp(14px, 2.6vw, 20px); padding: clamp(6px, 1.4vw, 12px) clamp(24px, 6vw, 56px); }
     /* The control panel under the game */
     #controls {
       display: flex;
@@ -71,7 +104,33 @@
 <body>
   <h1>Rusty Tanks</h1>
 
-  <canvas id="screen"></canvas>
+  <div id="stage">
+    <canvas id="screen"></canvas>
+
+    <div id="menu">
+      <div class="panel">
+        <h2>Rusty Tanks</h2>
+        <p class="tag">Aim. Fire. Mind the wind.</p>
+
+        <p class="sub">Game mode</p>
+        <div class="row" id="modeRow">
+          <button class="choice selected" data-mode="cpu">1 Player<small>vs Computer</small></button>
+          <button class="choice" data-mode="two">2 Players<small>same screen</small></button>
+        </div>
+
+        <div id="diffBlock">
+          <p class="sub">Computer difficulty</p>
+          <div class="row" id="diffRow">
+            <button class="choice" data-diff="easy">Easy<small>often misses</small></button>
+            <button class="choice selected" data-diff="normal">Normal<small>fair fight</small></button>
+            <button class="choice" data-diff="hard">Hard<small>sharp shooter</small></button>
+          </div>
+        </div>
+
+        <button id="start" class="start">START</button>
+      </div>
+    </div>
+  </div>
 
   <div id="controls">
     <label>Angle <input id="angle" type="range" min="0" max="180" step="1" value="55"> <span class="value" id="angleLabel">55&deg;</span></label>
@@ -80,9 +139,10 @@
     <button id="fire">FIRE!</button>
     <label><input id="guide" type="checkbox" checked> Aim guide</label>
     <button id="newgame" class="secondary">New Game</button>
+    <button id="menubtn" class="secondary">Menu</button>
   </div>
 
-  <p id="help">Two players take turns on one screen. Keys: &larr; &rarr; angle, &uarr; &darr; power (hold Shift for big steps), 1-6 = choose weapon, Space = fire, N = new game.</p>
+  <p id="help">Two players take turns on one screen. Keys: &larr; &rarr; angle, &uarr; &darr; power (hold Shift for big steps), 1-6 = choose weapon, Space = fire, N = new game, Esc = menu.</p>
 
   <script src="game.js"></script>
   <script src="main.js"></script>

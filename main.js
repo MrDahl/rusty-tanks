@@ -18,7 +18,20 @@ const newButton = document.getElementById("newgame");
 const guideBox = document.getElementById("guide");
 const weaponSelect = document.getElementById("weapon");
 
-let game = new Game();
+// Menu choices (what the player picked on the menu)
+const settings = { mode: "cpu", difficulty: "normal" };
+const menu = document.getElementById("menu");
+const menuButton = document.getElementById("menubtn");
+const startButton = document.getElementById("start");
+const diffBlock = document.getElementById("diffBlock");
+let menuOpen = true;
+
+// "ai" tells the game who is a computer: [player 1, player 2]
+function aiSetting() {
+  return settings.mode === "cpu" ? [null, settings.difficulty] : [null, null];
+}
+
+let game = new Game(undefined, aiSetting());
 
 // ---- Colours (the "rusty" look lives here) ---------------------------
 const COLORS = {
@@ -122,7 +135,7 @@ function drawTank(t, index, active) {
 }
 
 function drawAimGuide() {
-  if (!guideBox.checked || game.phase !== "aim") return;
+  if (!guideBox.checked || game.phase !== "aim" || game.isAiTurn || menuOpen) return;
   const pts = game.predictPath(120); // about 2 seconds of flight
   ctx.fillStyle = "rgba(242, 230, 208, 0.75)";
   for (let i = 4; i < pts.length; i += 5) {
@@ -164,6 +177,11 @@ function drawShells() {
   }
 }
 
+function shortName(i) {
+  if (!game.ai[i]) return "P" + (i + 1);
+  return "CPU (" + game.ai[i] + ")";
+}
+
 function drawHud() {
   ctx.font = "bold 20px 'Courier New', monospace";
   ctx.textBaseline = "top";
@@ -171,10 +189,10 @@ function drawHud() {
   // scores
   ctx.textAlign = "left";
   ctx.fillStyle = COLORS.tanks[0];
-  ctx.fillText("P1  " + game.tanks[0].score, 16, 12);
+  ctx.fillText(shortName(0) + "  " + game.tanks[0].score, 16, 12);
   ctx.textAlign = "right";
   ctx.fillStyle = COLORS.tanks[1];
-  ctx.fillText(game.tanks[1].score + "  P2", W - 16, 12);
+  ctx.fillText(game.tanks[1].score + "  " + shortName(1), W - 16, 12);
 
   // shots left
   ctx.font = "14px 'Courier New', monospace";
@@ -210,7 +228,7 @@ function drawHud() {
   ctx.font = "bold 18px 'Courier New', monospace";
   if (game.phase === "aim") {
     ctx.fillStyle = COLORS.tanks[game.current];
-    ctx.fillText("Player " + (game.current + 1) + ", take aim!", W / 2, 66);
+    ctx.fillText(game.isAiTurn ? "Computer is thinking..." : game.playerName(game.current) + ", take aim!", W / 2, 66);
     ctx.font = "14px 'Courier New', monospace";
     ctx.fillStyle = COLORS.textDim;
     ctx.fillText(game.weapon.name + " - " + game.weapon.info, W / 2, 90);
@@ -228,7 +246,7 @@ function drawHud() {
     ctx.fillText(game.winnerText(), W / 2, H / 2 - 14);
     ctx.font = "18px 'Courier New', monospace";
     ctx.fillStyle = COLORS.textDim;
-    ctx.fillText("Press New Game (or N) to play again", W / 2, H / 2 + 30);
+    ctx.fillText("New Game (N) to play again, Menu (Esc) to change settings", W / 2, H / 2 + 30);
   }
 }
 
@@ -243,6 +261,41 @@ function draw() {
   drawHud();
 }
 
+// ---- Menu ----------------------------------------------------------------
+function selectIn(rowId, attr, value) {
+  for (const b of document.querySelectorAll("#" + rowId + " button")) {
+    b.classList.toggle("selected", b.dataset[attr] === value);
+  }
+}
+
+for (const b of document.querySelectorAll("#modeRow button")) {
+  b.addEventListener("click", () => {
+    settings.mode = b.dataset.mode;
+    selectIn("modeRow", "mode", settings.mode);
+    diffBlock.style.display = settings.mode === "cpu" ? "" : "none";
+  });
+}
+for (const b of document.querySelectorAll("#diffRow button")) {
+  b.addEventListener("click", () => {
+    settings.difficulty = b.dataset.diff;
+    selectIn("diffRow", "diff", settings.difficulty);
+  });
+}
+
+function showMenu() {
+  menuOpen = true;
+  menu.classList.remove("hidden");
+}
+
+function startGame() {
+  game.newMatch(Date.now(), aiSetting());
+  menuOpen = false;
+  menu.classList.add("hidden");
+}
+
+startButton.addEventListener("click", startGame);
+menuButton.addEventListener("click", showMenu);
+
 // ---- Controls ---------------------------------------------------------
 function syncControls() {
   const t = game.tank;
@@ -250,7 +303,7 @@ function syncControls() {
   powerSlider.value = t.power;
   angleLabel.textContent = Math.round(t.angle) + "°";
   powerLabel.textContent = Math.round(t.power);
-  const canAim = game.phase === "aim";
+  const canAim = game.phase === "aim" && !game.isAiTurn && !menuOpen;
   angleSlider.disabled = !canAim;
   powerSlider.disabled = !canAim;
   fireButton.disabled = !canAim;
@@ -261,7 +314,7 @@ function syncControls() {
 let weaponSignature = "";
 function syncWeaponList() {
   const t = game.tank;
-  const sig = game.current + ":" + t.weapon + ":" + game.ammo[game.current].join(",") + ":" + game.phase;
+  const sig = game.current + ":" + t.weapon + ":" + game.ammo[game.current].join(",") + ":" + game.phase + ":" + game.isAiTurn;
   if (sig === weaponSignature) return;
   weaponSignature = sig;
   weaponSelect.innerHTML = "";
@@ -274,7 +327,7 @@ function syncWeaponList() {
     weaponSelect.appendChild(opt);
   });
   weaponSelect.value = t.weapon;
-  weaponSelect.disabled = game.phase !== "aim";
+  weaponSelect.disabled = game.phase !== "aim" || game.isAiTurn;
 }
 
 angleSlider.addEventListener("input", () => {
@@ -291,10 +344,21 @@ weaponSelect.addEventListener("change", () => {
 });
 fireButton.addEventListener("click", () => game.fire());
 newButton.addEventListener("click", () => {
-  game.newMatch(Date.now());
+  game.newMatch(Date.now(), aiSetting());
 });
 
 window.addEventListener("keydown", (e) => {
+  if (menuOpen) {
+    if (e.key === "Enter" && document.activeElement === document.body) {
+      startGame();
+      e.preventDefault();
+    }
+    return;
+  }
+  if (e.key === "Escape") {
+    showMenu();
+    return;
+  }
   const big = e.shiftKey ? 5 : 1; // hold Shift for bigger steps
   if (e.key === "ArrowLeft") game.setAngle(game.tank.angle + big);
   else if (e.key === "ArrowRight") game.setAngle(game.tank.angle - big);
@@ -304,7 +368,7 @@ window.addEventListener("keydown", (e) => {
   else if (e.key === " " || e.key === "Enter") {
     game.fire();
   } else if (e.key === "n" || e.key === "N") {
-    game.newMatch(Date.now());
+    game.newMatch(Date.now(), aiSetting());
   } else return;
   e.preventDefault();
 });
@@ -316,7 +380,7 @@ function frame(now) {
   leftover += Math.min(0.1, (now - last) / 1000);
   last = now;
   while (leftover >= STEP) {
-    game.update(STEP);
+    if (!menuOpen) game.update(STEP);
     leftover -= STEP;
   }
   syncControls();

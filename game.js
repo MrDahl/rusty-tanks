@@ -48,6 +48,13 @@ const WEAPONS = [
 ];
 const DRILL_SPEED = 240; // how fast the Burrower digs (pixels per second)
 
+// ---- Computer opponent settings -----------------------------------------
+// The computer first works out a PERFECT shot, then spoils it by a random
+// amount of up to this fraction (applied to both angle and power).
+// Random means it can still get lucky, even on Easy.
+const AI_ERROR = { easy: 0.30, normal: 0.15, hard: 0.05 };
+const AI_THINK_TIME = 1.6; // seconds the computer "thinks" before firing
+
 // ---- Seeded random numbers (same seed = same map) --------------------
 function makeRng(seed) {
   let a = seed >>> 0;
@@ -191,11 +198,16 @@ function stepProjectile(p, dt, wind, terrain, tanks) {
 
 // ---- The game itself -------------------------------------------------
 class Game {
-  constructor(seed) {
-    this.newMatch(seed === undefined ? Date.now() : seed);
+  // ai = [player1, player2]: null for a human, or "easy" / "normal" / "hard"
+  constructor(seed, ai) {
+    this.newMatch(seed === undefined ? Date.now() : seed, ai);
   }
 
-  newMatch(seed) {
+  newMatch(seed, ai) {
+    // If no new setting is given, keep the previous one
+    this.ai = ai !== undefined ? ai : (this.ai || [null, null]);
+    this.aiPlan = null;
+    this.aiTimer = 0;
     this.seed = seed;
     this.rand = makeRng(seed);
     this.terrain = new Terrain();
@@ -237,17 +249,27 @@ class Game {
     return WEAPONS[this.tank.weapon];
   }
 
+  get isAiTurn() {
+    return !!this.ai[this.current];
+  }
+
+  playerName(i) {
+    return this.ai[i] ? "Computer" : "Player " + (i + 1);
+  }
+
   // Where the barrel ends (the shell starts here)
   barrelTip(t) {
     const a = (t.angle * Math.PI) / 180;
     return { x: t.x + Math.cos(a) * 20, y: t.y - 8 - Math.sin(a) * 20 };
   }
 
-  setAngle(deg) {
+  setAngle(deg, force) {
+    if (this.isAiTurn && !force) return;
     if (this.phase === "aim") this.tank.angle = Math.max(0, Math.min(180, deg));
   }
 
-  setPower(p) {
+  setPower(p, force) {
+    if (this.isAiTurn && !force) return;
     if (this.phase === "aim") this.tank.power = Math.max(5, Math.min(100, p));
   }
 
@@ -255,12 +277,14 @@ class Game {
     return this.ammo[player][weaponIndex] > 0;
   }
 
-  setWeapon(index) {
+  setWeapon(index, force) {
+    if (this.isAiTurn && !force) return;
     if (this.phase !== "aim" || index < 0 || index >= WEAPONS.length) return;
     if (this.hasAmmo(this.current, index)) this.tank.weapon = index;
   }
 
-  fire() {
+  fire(force) {
+    if (this.isAiTurn && !force) return;
     if (this.phase !== "aim") return;
     const t = this.tank;
     if (!this.hasAmmo(this.current, t.weapon)) return;
@@ -299,6 +323,7 @@ class Game {
   // Call this 60 times per second
   update(dt) {
     for (const e of this.explosions) e.t += dt;
+    if (this.phase === "aim" && this.isAiTurn) this.updateAi(dt);
 
     if (this.phase === "flight") {
       for (const p of this.projs.slice()) this.updateProjectile(p, dt);
@@ -488,6 +513,97 @@ class Game {
     }
   }
 
+  // ---------------------------------------------------------------
+  //  Computer opponent
+  // ---------------------------------------------------------------
+
+  // Called every frame while it is the computer's turn
+  updateAi(dt) {
+    const t = this.tank;
+    if (!this.aiPlan) {
+      this.aiPlan = this.planAiShot();
+      this.aiTimer = AI_THINK_TIME;
+      t.weapon = this.aiPlan.weapon;
+    }
+    // Slide the angle and power to the chosen numbers, like a player adjusting them
+    const k = Math.min(1, dt * 3);
+    t.angle += (this.aiPlan.angle - t.angle) * k;
+    t.power += (this.aiPlan.power - t.power) * k;
+
+    this.aiTimer -= dt;
+    if (this.aiTimer <= 0) {
+      t.angle = this.aiPlan.angle;
+      t.power = this.aiPlan.power;
+      this.aiPlan = null;
+      this.fire(true);
+    }
+  }
+
+  // Decide weapon, work out the perfect shot, then spoil it a little
+  planAiShot() {
+    const difficulty = this.ai[this.current];
+    const errorSize = AI_ERROR[difficulty] !== undefined ? AI_ERROR[difficulty] : AI_ERROR.normal;
+
+    // Weapon: sometimes the Big Bolt (while it has any left), otherwise the Rivet Shot.
+    // (The computer only uses these two for now - their aim is easy to calculate.)
+    const weapon = this.hasAmmo(this.current, 1) && this.rand() < 0.5 ? 1 : 0;
+    const perfect = this.findBestShot(WEAPONS[weapon].blast);
+
+    // Miscalculation: angle is measured as "how high the barrel points" (0-90),
+    // so the same percentage works whether the enemy is to the left or right.
+    const facingRight = perfect.angle <= 90;
+    const elevation = facingRight ? perfect.angle : 180 - perfect.angle;
+    const wobble = () => 1 + (this.rand() * 2 - 1) * errorSize; // e.g. 0.70 .. 1.30
+    const newElevation = Math.max(2, Math.min(88, elevation * wobble()));
+    const angle = facingRight ? newElevation : 180 - newElevation;
+    const power = Math.max(5, Math.min(100, perfect.power * wobble()));
+
+    return { weapon, angle, power, perfect };
+  }
+
+  // Try lots of angle/power combinations using the real physics and keep
+  // the one that lands closest to the enemy (without blowing up itself).
+  findBestShot(blast) {
+    const me = this.tank;
+    const foe = this.tanks[1 - this.current];
+    const targetX = foe.x;
+    const targetY = foe.y - 8;
+
+    const score = (angle, power) => {
+      const tip = this.barrelTip({ x: me.x, y: me.y, angle: angle });
+      const a = (angle * Math.PI) / 180;
+      const speed = power * SPEED_PER_POWER;
+      const p = { x: tip.x, y: tip.y, vx: Math.cos(a) * speed, vy: -Math.sin(a) * speed };
+      let result = "flying";
+      for (let i = 0; i < 900 && result === "flying"; i++) {
+        result = stepProjectile(p, STEP, this.wind, this.terrain, this.tanks);
+      }
+      let miss = Math.hypot(p.x - targetX, p.y - targetY);
+      if (result === "out") miss += 1000;                       // flew off the map
+      const own = Math.hypot(p.x - me.x, p.y - (me.y - 8));
+      if (own < blast + TANK_RADIUS) miss += 500;               // would hit itself
+      return miss;
+    };
+
+    let best = { angle: 45, power: 50, miss: Infinity };
+    const tryShot = (angle, power) => {
+      const miss = score(angle, power);
+      if (miss < best.miss) best = { angle, power, miss };
+    };
+
+    // Coarse sweep, then a fine search around the best result
+    for (let angle = 5; angle <= 175; angle += 2) {
+      for (let power = 15; power <= 100; power += 2) tryShot(angle, power);
+    }
+    const a0 = best.angle, p0 = best.power;
+    for (let angle = a0 - 2; angle <= a0 + 2; angle += 0.5) {
+      for (let power = p0 - 2; power <= p0 + 2; power += 0.5) {
+        if (angle >= 0 && angle <= 180 && power >= 5 && power <= 100) tryShot(angle, power);
+      }
+    }
+    return best;
+  }
+
   // The dotted aim guide: simulate the shot with the exact same physics
   // (it shows the path of the first shell, up to the first impact)
   predictPath(maxSteps) {
@@ -508,11 +624,11 @@ class Game {
   winnerText() {
     const [a, b] = [this.tanks[0].score, this.tanks[1].score];
     if (a === b) return "It's a draw!";
-    return a > b ? "Player 1 wins!" : "Player 2 wins!";
+    return this.playerName(a > b ? 0 : 1) + " wins!";
   }
 }
 
 // Lets the test script load this file in Node (ignored in the browser)
 if (typeof module !== "undefined") {
-  module.exports = { Game, Terrain, WEAPONS, stepProjectile, makeRng, W, H, STEP, TANK_RADIUS, SHOTS_PER_PLAYER };
+  module.exports = { Game, Terrain, WEAPONS, AI_ERROR, stepProjectile, makeRng, W, H, STEP, TANK_RADIUS, SHOTS_PER_PLAYER };
 }
