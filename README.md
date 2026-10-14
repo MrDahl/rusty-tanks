@@ -8,8 +8,9 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 - Two players share one screen and take turns.
 - Set angle and power, then fire. Watch the wind.
 - Hits earn points, hitting yourself loses points. Each player gets 10 shots.
+- Six weapons (pick from the list or press 1-6): Rivet Shot (unlimited), Big Bolt, Scatter Nuts, Pogo Bomb, Burrower and Slag Heap (2 uses each).
 
-Keys: left/right = angle, up/down = power (hold Shift for big steps), Space = fire, N = new game.
+Keys: left/right = angle, up/down = power (hold Shift for big steps), 1-6 = weapon, Space = fire, N = new game.
 
 ## Files
 - `index.html`: page layout and styling

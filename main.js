@@ -16,6 +16,7 @@ const powerLabel = document.getElementById("powerLabel");
 const fireButton = document.getElementById("fire");
 const newButton = document.getElementById("newgame");
 const guideBox = document.getElementById("guide");
+const weaponSelect = document.getElementById("weapon");
 
 let game = new Game();
 
@@ -129,31 +130,38 @@ function drawAimGuide() {
   }
 }
 
-function drawExplosion() {
-  const e = game.explosion;
-  if (!e) return;
-  const k = Math.min(1, e.t / BOOM_TIME);
-  const r = e.r * (0.4 + 0.9 * Math.min(1, k * 3));
-  const alpha = 1 - k;
-  const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, r);
-  g.addColorStop(0, "rgba(255, 245, 200, " + alpha + ")");
-  g.addColorStop(0.5, "rgba(255, 140, 40, " + alpha * 0.9 + ")");
-  g.addColorStop(1, "rgba(120, 30, 10, 0)");
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
-  ctx.fill();
+function drawExplosions() {
+  for (const e of game.explosions) {
+    const k = Math.min(1, e.t / BOOM_TIME);
+    const r = e.r * (0.4 + 0.9 * Math.min(1, k * 3));
+    const alpha = 1 - k;
+    const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, r);
+    if (e.kind === "dirt") {
+      g.addColorStop(0, "rgba(200, 140, 90, " + alpha * 0.8 + ")");
+      g.addColorStop(1, "rgba(120, 70, 40, 0)");
+    } else {
+      g.addColorStop(0, "rgba(255, 245, 200, " + alpha + ")");
+      g.addColorStop(0.5, "rgba(255, 140, 40, " + alpha * 0.9 + ")");
+      g.addColorStop(1, "rgba(120, 30, 10, 0)");
+    }
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
-function drawShell() {
-  if (!game.proj) return;
-  ctx.fillStyle = "#1a1a1a";
-  ctx.beginPath();
-  ctx.arc(game.proj.x, game.proj.y, 3.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = COLORS.text;
-  ctx.lineWidth = 1;
-  ctx.stroke();
+function drawShells() {
+  for (const p of game.projs) {
+    const small = p.w.name === "fragment";
+    ctx.fillStyle = p.w.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, small ? 2.5 : 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.text;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
 }
 
 function drawHud() {
@@ -203,6 +211,9 @@ function drawHud() {
   if (game.phase === "aim") {
     ctx.fillStyle = COLORS.tanks[game.current];
     ctx.fillText("Player " + (game.current + 1) + ", take aim!", W / 2, 66);
+    ctx.font = "14px 'Courier New', monospace";
+    ctx.fillStyle = COLORS.textDim;
+    ctx.fillText(game.weapon.name + " - " + game.weapon.info, W / 2, 90);
   } else if (game.lastHit) {
     ctx.fillStyle = COLORS.text;
     ctx.fillText(game.lastHit, W / 2, 66);
@@ -227,8 +238,8 @@ function draw() {
   ctx.drawImage(terrainCanvas, 0, 0);
   game.tanks.forEach((t, i) => drawTank(t, i, i === game.current));
   drawAimGuide();
-  drawShell();
-  drawExplosion();
+  drawShells();
+  drawExplosions();
   drawHud();
 }
 
@@ -243,6 +254,27 @@ function syncControls() {
   angleSlider.disabled = !canAim;
   powerSlider.disabled = !canAim;
   fireButton.disabled = !canAim;
+  syncWeaponList();
+}
+
+// Rebuild the weapon list only when something changed (so an open dropdown isn't disturbed)
+let weaponSignature = "";
+function syncWeaponList() {
+  const t = game.tank;
+  const sig = game.current + ":" + t.weapon + ":" + game.ammo[game.current].join(",") + ":" + game.phase;
+  if (sig === weaponSignature) return;
+  weaponSignature = sig;
+  weaponSelect.innerHTML = "";
+  WEAPONS.forEach((w, i) => {
+    const left = game.ammo[game.current][i];
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = (i + 1) + ". " + w.name + (left === Infinity ? "" : " (" + left + ")");
+    opt.disabled = left <= 0;
+    weaponSelect.appendChild(opt);
+  });
+  weaponSelect.value = t.weapon;
+  weaponSelect.disabled = game.phase !== "aim";
 }
 
 angleSlider.addEventListener("input", () => {
@@ -251,6 +283,10 @@ angleSlider.addEventListener("input", () => {
 });
 powerSlider.addEventListener("input", () => {
   game.setPower(Number(powerSlider.value));
+  syncControls();
+});
+weaponSelect.addEventListener("change", () => {
+  game.setWeapon(Number(weaponSelect.value));
   syncControls();
 });
 fireButton.addEventListener("click", () => game.fire());
@@ -264,6 +300,7 @@ window.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowRight") game.setAngle(game.tank.angle - big);
   else if (e.key === "ArrowUp") game.setPower(game.tank.power + big);
   else if (e.key === "ArrowDown") game.setPower(game.tank.power - big);
+  else if (e.key >= "1" && e.key <= "9") game.setWeapon(Number(e.key) - 1);
   else if (e.key === " " || e.key === "Enter") {
     game.fire();
   } else if (e.key === "n" || e.key === "N") {
