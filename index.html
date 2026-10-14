@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rusty Tanks</title>
+  <style>
+    /* The page: dark and rusty */
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #1c1412;
+      color: #f2e6d0;
+      font-family: "Courier New", monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    h1 {
+      margin: 12px 0 0;
+      font-size: 28px;
+      letter-spacing: 4px;
+      color: #d9a441;
+      text-transform: uppercase;
+    }
+    /* The game screen scales to fit any window */
+    #screen {
+      width: min(96vw, 960px);
+      height: auto;
+      aspect-ratio: 960 / 540;
+      background: #000;
+      border: 3px solid #5a3a2a;
+      border-radius: 4px;
+    }
+    /* The control panel under the game */
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 16px;
+      background: #2a1d19;
+      border: 2px solid #5a3a2a;
+      border-radius: 4px;
+      width: min(92vw, 900px);
+      box-sizing: border-box;
+    }
+    label { display: flex; align-items: center; gap: 8px; }
+    .value { display: inline-block; min-width: 3ch; text-align: right; color: #d9a441; }
+    input[type="range"] { width: 150px; accent-color: #d9a441; }
+    button {
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: bold;
+      padding: 8px 18px;
+      color: #1c1412;
+      background: #d9a441;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    button:disabled { background: #6b5a40; cursor: not-allowed; }
+    button.secondary { background: #7fa6b3; }
+    #help { font-size: 13px; color: #b9a88c; margin: 0 0 12px; text-align: center; padding: 0 12px; }
+  </style>
+</head>
+<body>
+  <h1>Rusty Tanks</h1>
+
+  <canvas id="screen"></canvas>
+
+  <div id="controls">
+    <label>Angle <input id="angle" type="range" min="0" max="180" step="1" value="55"> <span class="value" id="angleLabel">55&deg;</span></label>
+    <label>Power <input id="power" type="range" min="5" max="100" step="1" value="60"> <span class="value" id="powerLabel">60</span></label>
+    <button id="fire">FIRE!</button>
+    <label><input id="guide" type="checkbox" checked> Aim guide</label>
+    <button id="newgame" class="secondary">New Game</button>
+  </div>
+
+  <p id="help">Two players take turns on one screen. Keys: &larr; &rarr; angle, &uarr; &darr; power (hold Shift for big steps), Space = fire, N = new game.</p>
+
+  <script src="game.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
