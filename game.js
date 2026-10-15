@@ -20,6 +20,8 @@ const MOVE_BUDGET = 60;        // how many pixels a tank may drive each turn
 const MOVE_SPEED = 45;         // driving speed (pixels per second)
 const CLIMB_LIMIT = 2;         // steepest step a tank can climb (pixels per pixel driven)
 const MIN_TANK_GAP = 36;       // tanks can't drive closer to each other than this
+const FALL_SPEED = 4;          // loose dirt falls this many pixels per physics step (240 px/s)
+const SETTLE_MAX = 6;          // seconds, at most, to wait for dirt to finish falling
 
 
 // ---- The weapons live in weapons.js (loaded before this file in the browser) ----
@@ -51,6 +53,40 @@ class Terrain {
   constructor() {
     this.mask = new Uint8Array(W * H);
     this.version = ++versionCounter;
+    this.unstable = new Set(); // columns that might have loose dirt (checked and dropped when stable)
+  }
+
+  // Remember that columns x0..x1 changed, so any dirt left hanging there should fall
+  markUnstable(x0, x1) {
+    for (let x = Math.max(0, Math.floor(x0)); x <= Math.min(W - 1, Math.ceil(x1)); x++) this.unstable.add(x);
+  }
+
+  // One step of falling dirt: every piece of dirt with air under it drops, up to `speed` pixels.
+  // Dirt keeps falling until it lands on other dirt (so overhangs and tunnel roofs collapse).
+  // Returns true if anything moved.
+  settleStep(speed) {
+    let moved = false;
+    for (const x of this.unstable) {
+      let columnMoved = false;
+      for (let pass = 0; pass < speed; pass++) {
+        let m = false;
+        // bottom to top, so a falling block moves as one piece
+        for (let y = H - 2; y >= 0; y--) {
+          const i = y * W + x;
+          if (this.mask[i] === 1 && this.mask[i + W] === 0) {
+            this.mask[i + W] = 1;
+            this.mask[i] = 0;
+            m = true;
+          }
+        }
+        if (!m) break;
+        columnMoved = true;
+      }
+      if (columnMoved) moved = true;
+      else this.unstable.delete(x);
+    }
+    if (moved) this.version = ++versionCounter;
+    return moved;
   }
 
   isSolid(x, y) {
@@ -73,6 +109,7 @@ class Terrain {
         if (dx * dx + dy * dy <= r * r) this.mask[y * W + x] = 0;
       }
     }
+    this.markUnstable(minX, maxX);
     this.version = ++versionCounter;
   }
 
@@ -84,6 +121,7 @@ class Terrain {
       const top = this.surfaceY(x, 0);
       for (let y = Math.max(0, top - height); y < top; y++) this.mask[y * W + x] = 1;
     }
+    this.markUnstable(cx - r, cx + r);
     this.version = ++versionCounter;
   }
 
@@ -94,6 +132,7 @@ class Terrain {
         this.mask[y * W + x] = 0;
       }
     }
+    this.markUnstable(x0, x0 + w);
     this.version = ++versionCounter;
   }
 
@@ -105,6 +144,7 @@ class Terrain {
       const top = this.surfaceY(x, 0);
       for (let y = Math.max(0, top - height); y < top; y++) this.mask[y * W + x] = 1;
     }
+    this.markUnstable(cx - width / 2, cx + width / 2);
     this.version = ++versionCounter;
   }
 
@@ -233,13 +273,14 @@ class Game {
     this.shotLimit = loadouts ? Math.max(loadouts[0].length, loadouts[1].length) : SHOTS_PER_PLAYER;
     this.tanks.forEach((t, p) => { t.weapon = this.firstWeapon(p); });
     this.moveLeft = MOVE_BUDGET; // driving allowance for this turn
+    this.settleTime = 0;         // how long we have waited for loose dirt to fall
     this.moveDir = 0;            // -1 left, 0 stopped, 1 right (set by the controls)
     this.turnNote = "";          // extra message for this turn ("Hopped!" etc.)
 
     this.current = 0;
     this.shotsFired = [0, 0];
     this.wind = Math.round((this.rand() * 2 - 1) * 10);
-    this.phase = "aim"; // "aim" -> "flight" -> "boom" -> "aim" ... -> "over"
+    this.phase = "aim"; // "aim" -> "flight" -> "boom" -> "settle" -> "aim" ... -> "over"
     this.projs = [];        // all shells currently in the air
     this.explosions = [];   // explosion animations
     this.boomTimer = 0;
@@ -427,9 +468,22 @@ class Game {
         this.boomTimer = this.explosions.length ? BOOM_TIME : 0.5;
       }
     } else if (this.phase === "boom") {
+      this.fall();
       this.boomTimer -= dt;
-      if (this.boomTimer <= 0) this.endTurn();
+      if (this.boomTimer <= 0) {          // explosion over: let loose dirt finish falling
+        this.phase = "settle";
+        this.settleTime = 0;
+      }
+    } else if (this.phase === "settle") {
+      this.fall();
+      this.settleTime += dt;
+      if (this.terrain.unstable.size === 0 || this.settleTime >= SETTLE_MAX) this.endTurn();
     }
+  }
+
+  // Loose dirt falls a little, and tanks ride along with the ground under them
+  fall() {
+    if (this.terrain.settleStep(FALL_SPEED)) this.settleTanks();
   }
 
   // Move one shell and react to what happens to it
