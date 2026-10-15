@@ -67,6 +67,24 @@
     button.choice small { display: block; font-weight: normal; color: #b9a88c; font-size: 0.8em; }
     button.choice.selected { border-color: #d9a441; background: #5a3a2a; color: #d9a441; }
     button.start { margin-top: clamp(10px, 2.5vw, 22px); font-size: clamp(14px, 2.6vw, 20px); padding: clamp(6px, 1.4vw, 12px) clamp(24px, 6vw, 56px); }
+    /* The weapon draft screen (shown instead of the game while players pick weapons) */
+    #draft { width: min(96vw, 960px); box-sizing: border-box; padding: 12px 14px 16px; background: #2a1d19; border: 3px solid #5a3a2a; border-radius: 4px; }
+    #draft.hidden { display: none; }
+    #draft h2 { margin: 0 0 4px; text-align: center; color: #d9a441; letter-spacing: 3px; text-transform: uppercase; font-size: clamp(18px, 4vw, 28px); }
+    #draftTurn { text-align: center; margin: 0 0 10px; font-size: clamp(13px, 2.4vw, 17px); min-height: 1.4em; }
+    #picks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .pickbox { background: #1c1412; border: 2px solid #5a3a2a; border-radius: 4px; padding: 6px 8px; }
+    .pickbox.active { border-color: #d9a441; }
+    .pickbox h3 { margin: 0 0 4px; font-size: 14px; color: #b9a88c; }
+    .pickbox ol { margin: 0; padding-left: 22px; font-size: 13px; line-height: 1.5; }
+    .pickbox li.empty { color: #5a4a40; }
+    #weaponGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; }
+    button.wcard { text-align: left; background: #3a2a24; color: #f2e6d0; border: 2px solid #5a3a2a; padding: 6px 8px; font-weight: normal; border-left-width: 8px; }
+    button.wcard b { display: block; font-size: 14px; color: #f2e6d0; }
+    button.wcard span { display: block; font-size: 11px; color: #b9a88c; margin-top: 2px; line-height: 1.3; }
+    button.wcard:hover:not(:disabled) { background: #5a3a2a; }
+    button.wcard:disabled { opacity: 0.45; cursor: not-allowed; background: #3a2a24; }
+    @media (max-width: 560px) { #picks { grid-template-columns: 1fr; } }
     /* The control panel under the game */
     #controls {
       display: flex;
@@ -132,9 +150,25 @@
     </div>
   </div>
 
+  <div id="draft" class="hidden">
+    <h2>Choose your weapons</h2>
+    <p id="draftTurn"></p>
+    <div id="picks">
+      <div class="pickbox" id="pickbox0"><h3 id="pickname0"></h3><ol id="picklist0"></ol></div>
+      <div class="pickbox" id="pickbox1"><h3 id="pickname1"></h3><ol id="picklist1"></ol></div>
+    </div>
+    <div id="weaponGrid"></div>
+    <div class="row">
+      <button id="draftBack" class="secondary">Back</button>
+      <button id="draftRandom" class="secondary">Random picks for me</button>
+      <button id="draftGo" disabled>START BATTLE</button>
+    </div>
+  </div>
+
   <div id="controls">
     <label>Angle <input id="angle" type="range" min="0" max="180" step="1" value="55"> <span class="value" id="angleLabel">55&deg;</span></label>
     <label>Power <input id="power" type="range" min="5" max="100" step="1" value="60"> <span class="value" id="powerLabel">60</span></label>
+    <label>Drive <button id="driveL" class="secondary" title="Hold to drive left (A)">&#9664;</button><button id="driveR" class="secondary" title="Hold to drive right (D)">&#9654;</button></label>
     <label>Weapon <select id="weapon"></select></label>
     <button id="fire">FIRE!</button>
     <label><input id="guide" type="checkbox" checked> Aim guide</label>
@@ -142,8 +176,9 @@
     <button id="menubtn" class="secondary">Menu</button>
   </div>
 
-  <p id="help">Two players take turns on one screen. Keys: &larr; &rarr; angle, &uarr; &darr; power (hold Shift for big steps), 1-6 = choose weapon, Space = fire, N = new game, Esc = menu.</p>
+  <p id="help">Two players take turns on one screen. Keys: &larr; &rarr; angle, &uarr; &darr; power (hold Shift for big steps), A / D = drive (limited each turn), 1-9 = choose weapon, Space = fire, N = rematch, Esc = menu.</p>
 
+  <script src="weapons.js"></script>
   <script src="game.js"></script>
   <script src="main.js"></script>
 </body>

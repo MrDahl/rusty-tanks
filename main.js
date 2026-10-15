@@ -166,6 +166,7 @@ function drawExplosions() {
 
 function drawShells() {
   for (const p of game.projs) {
+    if (p.delay > 0) continue; // volley/rain shells that haven't launched yet
     const small = p.w.name === "fragment";
     ctx.fillStyle = p.w.color;
     ctx.beginPath();
@@ -198,9 +199,9 @@ function drawHud() {
   ctx.font = "14px 'Courier New', monospace";
   ctx.fillStyle = COLORS.textDim;
   ctx.textAlign = "left";
-  ctx.fillText("shots left: " + (SHOTS_PER_PLAYER - game.shotsFired[0]), 16, 38);
+  ctx.fillText("shots left: " + (game.shotLimit - game.shotsFired[0]), 16, 38);
   ctx.textAlign = "right";
-  ctx.fillText("shots left: " + (SHOTS_PER_PLAYER - game.shotsFired[1]), W - 16, 38);
+  ctx.fillText("shots left: " + (game.shotLimit - game.shotsFired[1]), W - 16, 38);
 
   // wind
   ctx.textAlign = "center";
@@ -232,6 +233,7 @@ function drawHud() {
     ctx.font = "14px 'Courier New', monospace";
     ctx.fillStyle = COLORS.textDim;
     ctx.fillText(game.weapon.name + " - " + game.weapon.info, W / 2, 90);
+    if (!game.isAiTurn) ctx.fillText("Drive left: " + Math.round(game.moveLeft) + " px  (A / D)", W / 2, 110);
   } else if (game.lastHit) {
     ctx.fillStyle = COLORS.text;
     ctx.fillText(game.lastHit, W / 2, 66);
@@ -287,11 +289,144 @@ function showMenu() {
   menu.classList.remove("hidden");
 }
 
+// Start button: go to the weapon draft
 function startGame() {
-  game.newMatch(Date.now(), aiSetting());
-  menuOpen = false;
   menu.classList.add("hidden");
+  openDraft();
 }
+
+// New map, same weapons
+let currentLoadouts = null;
+function rematch() {
+  game.newMatch(Date.now(), aiSetting(), currentLoadouts ? [currentLoadouts[0].slice(), currentLoadouts[1].slice()] : undefined);
+}
+
+// ---- Weapon draft --------------------------------------------------------
+// Players take turns picking weapons (P1, P2, P1, ...). Both may pick the same weapon, and
+// the same player may pick one more than once. Each pick is one use in the battle.
+const PICKS_EACH = 10;
+const draftSection = document.getElementById("draft");
+const stageEl = document.getElementById("stage");
+const controlsEl = document.getElementById("controls");
+const helpEl = document.getElementById("help");
+const draftGo = document.getElementById("draftGo");
+const draft = { picks: [[], []], token: 0 };
+let draftOpen = false;
+
+function drafter() {
+  if (draft.picks[0].length >= PICKS_EACH) return 1;
+  if (draft.picks[1].length >= PICKS_EACH) return 0;
+  return draft.picks[0].length <= draft.picks[1].length ? 0 : 1;
+}
+function draftDone() {
+  return draft.picks[0].length >= PICKS_EACH && draft.picks[1].length >= PICKS_EACH;
+}
+function playerLabel(p) {
+  return aiSetting()[p] ? "Computer (" + aiSetting()[p] + ")" : "Player " + (p + 1);
+}
+
+function buildWeaponGrid() {
+  const grid = document.getElementById("weaponGrid");
+  grid.innerHTML = "";
+  WEAPONS.forEach((w, i) => {
+    const b = document.createElement("button");
+    b.className = "wcard";
+    b.style.borderLeftColor = w.color;
+    b.innerHTML = "<b></b><span></span>";
+    b.firstChild.textContent = w.name;
+    b.lastChild.textContent = w.info;
+    b.addEventListener("click", () => draftPick(i));
+    grid.appendChild(b);
+  });
+}
+
+function renderDraft() {
+  const who = drafter();
+  for (let p = 0; p < 2; p++) {
+    document.getElementById("pickname" + p).textContent = playerLabel(p) + " - " + draft.picks[p].length + "/" + PICKS_EACH;
+    document.getElementById("pickbox" + p).classList.toggle("active", !draftDone() && who === p);
+    const ol = document.getElementById("picklist" + p);
+    ol.innerHTML = "";
+    for (let n = 0; n < PICKS_EACH; n++) {
+      const li = document.createElement("li");
+      if (n < draft.picks[p].length) li.textContent = WEAPONS[draft.picks[p][n]].name;
+      else { li.textContent = "-"; li.className = "empty"; }
+      ol.appendChild(li);
+    }
+  }
+  const turn = document.getElementById("draftTurn");
+  const humanTurn = !draftDone() && !aiSetting()[who];
+  if (draftDone()) turn.textContent = "All set! Press START BATTLE.";
+  else if (humanTurn) turn.textContent = playerLabel(who) + ": pick weapon " + (draft.picks[who].length + 1) + " of " + PICKS_EACH;
+  else turn.textContent = playerLabel(who) + " is choosing...";
+  for (const b of document.querySelectorAll("#weaponGrid button")) b.disabled = !humanTurn;
+  document.getElementById("draftRandom").disabled = !humanTurn;
+  draftGo.disabled = !draftDone();
+}
+
+function draftPick(i) {
+  if (draftDone() || aiSetting()[drafter()]) return;
+  draft.picks[drafter()].push(i);
+  renderDraft();
+  draftAiTurn();
+}
+
+// When it is the computer's turn to pick, it picks by itself after a short pause
+function draftAiTurn() {
+  if (!draftOpen || draftDone() || !aiSetting()[drafter()]) return;
+  const token = draft.token;
+  const p = drafter();
+  setTimeout(() => {
+    if (!draftOpen || token !== draft.token || drafter() !== p) return;
+    draft.picks[p].push(aiDraftPick(draft.picks[p], Math.random));
+    renderDraft();
+    draftAiTurn();
+  }, 450);
+}
+
+function openDraft() {
+  draft.picks = [[], []];
+  draft.token++;
+  draftOpen = true;
+  stageEl.style.display = "none";
+  controlsEl.style.display = "none";
+  helpEl.style.display = "none";
+  draftSection.classList.remove("hidden");
+  buildWeaponGrid();
+  renderDraft();
+  draftAiTurn();
+}
+
+function closeDraft() {
+  draftOpen = false;
+  draft.token++;
+  draftSection.classList.add("hidden");
+  stageEl.style.display = "";
+  controlsEl.style.display = "";
+  helpEl.style.display = "";
+}
+
+document.getElementById("draftBack").addEventListener("click", () => {
+  closeDraft();
+  showMenu();
+});
+
+// "Random picks for me": fill in all remaining picks of the player whose turn it is
+document.getElementById("draftRandom").addEventListener("click", () => {
+  const p = drafter();
+  if (aiSetting()[p]) return;
+  while (draft.picks[p].length < PICKS_EACH) draft.picks[p].push(Math.floor(Math.random() * WEAPONS.length));
+  renderDraft();
+  draftAiTurn();
+});
+
+draftGo.addEventListener("click", () => {
+  if (!draftDone()) return;
+  currentLoadouts = [draft.picks[0].slice(), draft.picks[1].slice()];
+  closeDraft();
+  game.newMatch(Date.now(), aiSetting(), [currentLoadouts[0].slice(), currentLoadouts[1].slice()]);
+  menuOpen = false;
+});
 
 startButton.addEventListener("click", startGame);
 menuButton.addEventListener("click", showMenu);
@@ -310,6 +445,13 @@ function syncControls() {
   syncWeaponList();
 }
 
+// The weapons the current player still has (in list order)
+function ownedWeapons() {
+  const list = [];
+  WEAPONS.forEach((w, i) => { if (game.ammo[game.current][i] > 0) list.push(i); });
+  return list;
+}
+
 // Rebuild the weapon list only when something changed (so an open dropdown isn't disturbed)
 let weaponSignature = "";
 function syncWeaponList() {
@@ -318,12 +460,11 @@ function syncWeaponList() {
   if (sig === weaponSignature) return;
   weaponSignature = sig;
   weaponSelect.innerHTML = "";
-  WEAPONS.forEach((w, i) => {
+  ownedWeapons().forEach((i, n) => {
     const left = game.ammo[game.current][i];
     const opt = document.createElement("option");
     opt.value = i;
-    opt.textContent = (i + 1) + ". " + w.name + (left === Infinity ? "" : " (" + left + ")");
-    opt.disabled = left <= 0;
+    opt.textContent = (n + 1) + ". " + WEAPONS[i].name + (left === Infinity ? "" : " x" + left);
     weaponSelect.appendChild(opt);
   });
   weaponSelect.value = t.weapon;
@@ -343,11 +484,27 @@ weaponSelect.addEventListener("change", () => {
   syncControls();
 });
 fireButton.addEventListener("click", () => game.fire());
-newButton.addEventListener("click", () => {
-  game.newMatch(Date.now(), aiSetting());
+
+// Driving: hold a button (or the A / D key) to drive
+function holdToDrive(button, dir) {
+  const start = (e) => { e.preventDefault(); game.setMoveDir(dir); };
+  const stop = () => { if (game.moveDir === dir) game.setMoveDir(0); };
+  button.addEventListener("pointerdown", start);
+  button.addEventListener("pointerup", stop);
+  button.addEventListener("pointerleave", stop);
+  button.addEventListener("pointercancel", stop);
+}
+holdToDrive(document.getElementById("driveL"), -1);
+holdToDrive(document.getElementById("driveR"), 1);
+window.addEventListener("keyup", (e) => {
+  if (e.key === "a" || e.key === "A") { if (game.moveDir === -1) game.setMoveDir(0); }
+  if (e.key === "d" || e.key === "D") { if (game.moveDir === 1) game.setMoveDir(0); }
 });
+window.addEventListener("blur", () => game.setMoveDir(0));
+newButton.addEventListener("click", rematch);
 
 window.addEventListener("keydown", (e) => {
+  if (draftOpen) return;
   if (menuOpen) {
     if (e.key === "Enter" && document.activeElement === document.body) {
       startGame();
@@ -364,11 +521,17 @@ window.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowRight") game.setAngle(game.tank.angle - big);
   else if (e.key === "ArrowUp") game.setPower(game.tank.power + big);
   else if (e.key === "ArrowDown") game.setPower(game.tank.power - big);
-  else if (e.key >= "1" && e.key <= "9") game.setWeapon(Number(e.key) - 1);
+  else if (e.key === "a" || e.key === "A") game.setMoveDir(-1);
+  else if (e.key === "d" || e.key === "D") game.setMoveDir(1);
+  else if (e.key >= "1" && e.key <= "9") {
+    const owned = ownedWeapons();
+    const n = Number(e.key) - 1;
+    if (n < owned.length) game.setWeapon(owned[n]);
+  }
   else if (e.key === " " || e.key === "Enter") {
     game.fire();
   } else if (e.key === "n" || e.key === "N") {
-    game.newMatch(Date.now(), aiSetting());
+    rematch();
   } else return;
   e.preventDefault();
 });

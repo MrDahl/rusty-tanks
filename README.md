@@ -7,14 +7,15 @@ A two-player artillery game for the browser, inspired by classic tank games. Bui
 Play it: https://mrdahl.github.io/rusty-tanks/
 
 ## How to play
-- Choose 1 Player (vs the computer: Easy, Normal or Hard) or 2 Players on one screen from the main menu.
-- Set angle and power, then fire. Watch the wind.
+- Pick 1 Player (vs the computer: Easy, Normal or Hard) or 2 Players on one screen from the main menu.
+- Then draft your weapons: players take turns picking 10 weapons each from a pool of 29 (both players may pick the same one). Each pick is one use in the battle.
+- Each turn: optionally drive a little (60 px per turn), set angle and power, choose a weapon and fire. Watch the wind.
 - Hits earn points, hitting yourself loses points. Each player gets 10 shots.
-- Six weapons (pick from the list or press 1-6): Rivet Shot (unlimited), Big Bolt, Scatter Nuts, Pogo Bomb, Burrower and Slag Heap (2 uses each).
 
-Keys: left/right = angle, up/down = power (hold Shift for big steps), 1-6 = weapon, Space = fire, N = new game, Esc = menu.
+Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = drive, 1-9 = choose weapon, Space = fire, N = rematch (same weapons), Esc = menu.
 
 ## Files
 - `index.html`: page layout and styling
-- `game.js`: the rules (terrain, physics, wind, scoring, turns)
-- `main.js`: drawing and controls
+- `weapons.js`: the list of weapons (copy a line to invent a new one)
+- `game.js`: the rules (terrain, physics, wind, scoring, turns, computer opponent)
+- `main.js`: drawing, menus, weapon draft and controls
