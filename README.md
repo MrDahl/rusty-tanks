@@ -12,6 +12,14 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 - Loose dirt falls: overhangs and tunnel roofs collapse after every shot.
 - Each turn: optionally drive a little (60 px per turn), set angle and power, choose a weapon and fire. Watch the wind.
 - Hits earn points, hitting yourself loses points. Each player gets 10 shots.
+- Pick a season on the menu (or Random). Each one changes the rules:
+  - **Monsoon**: the ground turns to mud. A tank that does not drive during its turn sinks a little deeper (up to 12 px), and its shots get blocked by the dirt. Driving pulls it free.
+  - **Ice Age**: tanks keep sliding after you stop driving, and bouncing shells bounce in wild directions.
+  - **Thunderstorm**: 1-2 lightning bolts strike at the start of every turn. A tank that is hit loses 30 points.
+  - **Hurricane**: very strong wind that turns around every turn.
+  - **Apocalypse**: 3-4 meteors crash down at the start of every turn, digging craters. A tank that is hit loses 30 points.
+  - **Normal**: no weather effects. **Random**: a season picked at random for every match.
+  - The numbers are constants at the top of `game.js` (SINK_PER_TURN, STRIKE_DAMAGE, HURRICANE_WIND and so on), so they are easy to tune.
 
 Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = drive, 1-9 = choose weapon, Space = fire, N = rematch (same weapons), Esc = menu.
 

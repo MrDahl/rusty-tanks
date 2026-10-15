@@ -20,7 +20,7 @@ const weaponSelect = document.getElementById("weapon");
 const fxBox = document.getElementById("fx");
 
 // Menu choices (what the player picked on the menu)
-const settings = { mode: "cpu", difficulty: "normal" };
+const settings = { mode: "cpu", difficulty: "normal", season: "normal" };
 const menu = document.getElementById("menu");
 const menuButton = document.getElementById("menubtn");
 const startButton = document.getElementById("start");
@@ -54,10 +54,33 @@ const terrainImg = terrainCtx.createImageData(W, H);
 let paintedVersion = -1;
 
 const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-const ROCK = NEON.rock.map(hex);      // darkest .. lightest
-const CRACK = hex(NEON.crack);
-const RIM = hex(NEON.rim);
-const RIM2 = [74, 112, 190];
+let ROCK = NEON.rock.map(hex);      // darkest .. lightest
+let CRACK = hex(NEON.crack);
+let RIM = hex(NEON.rim);
+let RIM2 = [74, 112, 190];
+
+// What the ground is made of in each season: 4 rock colours (dark to light), crack colour,
+// bright edge colour and the softer glow just inside the edge.
+const THEMES = {
+  normal:       { rock: NEON.rock, crack: NEON.crack, rim: NEON.rim, rim2: "#4a70be" },
+  monsoon:      { rock: ["#2a1d12", "#3a281a", "#4b3422", "#5e4429"], crack: "#76553a", rim: "#d2a56a", rim2: "#8b6a45" },
+  iceage:       { rock: ["#2a4a6e", "#3a6590", "#5a8cb8", "#86b6d8"], crack: "#cfeaff", rim: "#ffffff", rim2: "#a8d8ff" },
+  thunderstorm: { rock: ["#0d1224", "#151c36", "#1d2748", "#27345a"], crack: "#4a6aa8", rim: "#a0c4ff", rim2: "#4a62a0" },
+  hurricane:    { rock: ["#17252c", "#1f3540", "#2a4654", "#37596a"], crack: "#5f8ea0", rim: "#8fd6e8", rim2: "#4e93a8" },
+  apocalypse:   { rock: ["#1c0e0e", "#2a1414", "#3d1c18", "#552618"], crack: "#ff6a2a", rim: "#ffa04a", rim2: "#b0451e" },
+};
+let themeWeather = null;
+function applyTheme() {
+  if (themeWeather === game.weather) return;
+  themeWeather = game.weather;
+  const th = THEMES[game.weather] || THEMES.normal;
+  ROCK = th.rock.map(hex);
+  CRACK = hex(th.crack);
+  RIM = hex(th.rim);
+  RIM2 = hex(th.rim2);
+  NEON.rock = th.rock;          // (flying rock debris uses these colours too)
+  game.terrain.touch(0, W - 1); // paint the whole ground again in the new colours
+}
 
 // Jagged cracks in the rock, worked out once. They are fixed to the screen, like a texture.
 const crackMask = new Uint8Array(W * H);
@@ -205,6 +228,18 @@ function fitSize(str, size, maxWidth) {
   return size;
 }
 
+const SEASON_NAMES = { normal: "Normal", monsoon: "Monsoon", iceage: "Ice Age", thunderstorm: "Thunderstorm", hurricane: "Hurricane", apocalypse: "Apocalypse", random: "Random" };
+const SEASON_COLORS = { normal: "#cfe8ff", monsoon: "#8ff0b8", iceage: "#bfefff", thunderstorm: NEON.violet, hurricane: NEON.cyan, apocalypse: "#ff7a3a" };
+const SEASON_INFO = {
+  normal: "Clear skies. No surprises.",
+  monsoon: "Mud! A tank that sits still sinks. Drive to get free.",
+  iceage: "Slippery! Tanks slide, and shells bounce wildly.",
+  thunderstorm: "1-2 lightning strikes every turn. A hit costs 30 points.",
+  hurricane: "Wild wind that turns around every turn.",
+  apocalypse: "3-4 meteors crash down every turn. A hit costs 30 points.",
+  random: "A surprise season, picked fresh for every match.",
+};
+
 function shortName(i) {
   if (!game.ai[i]) return "P" + (i + 1);
   return "CPU-" + game.ai[i].toUpperCase();
@@ -256,8 +291,13 @@ function drawHud() {
     const line = wp.name.toUpperCase() + " - " + wp.info;
     neonText(line, W / 2, 96, COLORS.text, fitSize(line, 9, W - 330), "center");
     if (!game.isAiTurn) neonText("DRIVE LEFT " + Math.round(game.moveLeft) + "  (A / D)", W / 2, 114, COLORS.textDim, 8, "center");
+    if (game.tank.sink > 0) neonText("STUCK IN THE MUD - DRIVE TO GET FREE", W / 2, 130, SEASON_COLORS.monsoon, 8, "center");
   } else if (game.lastHit && game.phase !== "over") {
     neonText(game.lastHit.toUpperCase(), W / 2, 76, NEON.amber, 13, "center");
+  }
+
+  if (game.weather !== "normal") {
+    neonText(SEASON_NAMES[game.weather].toUpperCase(), 18, 78, SEASON_COLORS[game.weather], 9, "left");
   }
 
   if (game.phase === "over") {
@@ -273,18 +313,25 @@ function drawHud() {
 }
 
 function draw() {
+  applyTheme();
   if (paintedVersion !== game.terrain.version) paintTerrain();
   ctx.save();
   const s = FX.shakeOffset();
   ctx.translate(s.x, s.y);
   FX.drawBackdrop(ctx);
   ctx.drawImage(terrainCanvas, 0, 0);
-  game.tanks.forEach((t, i) => drawTank(t, i, i === game.current));
+  game.tanks.forEach((t, i) => {
+    drawTank(t, i, i === game.current);
+    if (t.sink > 0) { // stuck in the mud: put the ground back in front of the sunken part
+      const sx = Math.round(t.x) - 34, sy = Math.round(t.y) - 22 - t.sink;
+      ctx.drawImage(terrainCanvas, sx, sy, 68, 62, sx, sy, 68, 62);
+    }
+  });
   drawAimGuide();
   FX.drawShells(ctx, game.projs);
   FX.drawExplosions(ctx, game);
   FX.drawParticles(ctx);
-  FX.drawRain(ctx, game.wind);
+  FX.drawWeather(ctx, game);
   ctx.restore();
   if (!menuOpen) drawHud();
 }
@@ -310,6 +357,15 @@ for (const b of document.querySelectorAll("#diffRow button")) {
   });
 }
 
+const seasonInfo = document.getElementById("seasonInfo");
+for (const b of document.querySelectorAll("#seasonRow button")) {
+  b.addEventListener("click", () => {
+    settings.season = b.dataset.season;
+    selectIn("seasonRow", "season", settings.season);
+    seasonInfo.textContent = SEASON_INFO[settings.season];
+  });
+}
+
 function showMenu() {
   menuOpen = true;
   menu.classList.remove("hidden");
@@ -324,7 +380,7 @@ function startGame() {
 // New map, same weapons
 let currentLoadouts = null;
 function rematch() {
-  game.newMatch(Date.now(), aiSetting(), currentLoadouts ? [currentLoadouts[0].slice(), currentLoadouts[1].slice()] : undefined);
+  game.newMatch(Date.now(), aiSetting(), currentLoadouts ? [currentLoadouts[0].slice(), currentLoadouts[1].slice()] : undefined, settings.season);
 }
 
 // ---- Weapon draft --------------------------------------------------------
@@ -450,7 +506,7 @@ draftGo.addEventListener("click", () => {
   if (!draftDone()) return;
   currentLoadouts = [draft.picks[0].slice(), draft.picks[1].slice()];
   closeDraft();
-  game.newMatch(Date.now(), aiSetting(), [currentLoadouts[0].slice(), currentLoadouts[1].slice()]);
+  game.newMatch(Date.now(), aiSetting(), [currentLoadouts[0].slice(), currentLoadouts[1].slice()], settings.season);
   menuOpen = false;
 });
 

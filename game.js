@@ -25,6 +25,26 @@ const MIN_TANK_GAP = 36;       // tanks can't drive closer to each other than th
 const FALL_SPEED = 4;          // loose dirt falls this many pixels per physics step (240 px/s)
 const SETTLE_MAX = 6;          // seconds, at most, to wait for dirt to finish falling
 
+// ---- Seasons (the weather chosen on the menu) ----
+// normal       nothing special
+// monsoon      mud: a tank that does not drive during its turn sinks deeper
+// iceage       tanks slide on after driving, bouncing shells fly off wildly
+// thunderstorm 1-2 lightning bolts hit the ground at the start of every turn
+// hurricane    very strong wind that turns around every turn
+// apocalypse   3-4 meteors crash down at the start of every turn
+const SEASONS = ["normal", "monsoon", "iceage", "thunderstorm", "hurricane", "apocalypse"];
+const SINK_PER_TURN = 3;       // monsoon: pixels an idle tank sinks each turn
+const SINK_MAX = 12;           // ...and the deepest it can go
+const SLIDE_DECAY = 1.3;       // iceage: how quickly a sliding tank slows down (higher = stops sooner)
+const HURRICANE_WIND = [35, 60]; // hurricane wind strength range (a normal wind is at most 20)
+const STRIKE_DAMAGE = 30;      // points a tank loses when hit by lightning or a meteor
+const STRIKE_REACH = 18;       // a bolt this close (sideways) to a tank hits it
+const METEOR_REACH = 20;       // same for meteors
+const METEOR_BLAST = 26;       // size of a meteor crater
+const BOLT_AIM_BIAS = 0.2;     // chance that a bolt is aimed near a tank instead of anywhere (0 = pure luck)
+const METEOR_AIM_BIAS = 0;     // same for meteors (they fall completely at random)
+const METEOR_FALL_TIME = 0.6;  // seconds a meteor is visible before it lands (main.js draws it)
+
 
 // ---- The weapons live in weapons.js (loaded before this file in the browser) ----
 const WEAPON_LIST = typeof WEAPONS !== "undefined" ? WEAPONS : require("./weapons.js").WEAPONS;
@@ -257,17 +277,23 @@ function stepProjectile(p, dt, wind, terrain, tanks) {
 class Game {
   // ai = [player1, player2]: null for a human, or "easy" / "normal" / "hard"
   // loadouts = [[weapon numbers player 1 drafted], [player 2's]], or nothing for the quick-test setup
-  constructor(seed, ai, loadouts) {
-    this.newMatch(seed === undefined ? Date.now() : seed, ai, loadouts);
+  constructor(seed, ai, loadouts, season) {
+    this.newMatch(seed === undefined ? Date.now() : seed, ai, loadouts, season);
   }
 
-  newMatch(seed, ai, loadouts) {
+  newMatch(seed, ai, loadouts, season) {
     // If no new setting is given, keep the previous one
     this.ai = ai !== undefined ? ai : (this.ai || [null, null]);
     this.aiPlan = null;
     this.aiTimer = 0;
     this.seed = seed;
     this.rand = makeRng(seed);
+    // The season: what was picked on the menu ("random" = one of the six, picked fresh every match)
+    if (season !== undefined) this.seasonSetting = season;
+    if (this.seasonSetting !== "random" && !SEASONS.includes(this.seasonSetting)) this.seasonSetting = "normal";
+    this.weather = this.seasonSetting === "random"
+      ? SEASONS[Math.floor(makeRng((seed ^ 0x51ed270b) >>> 0)() * SEASONS.length)]
+      : this.seasonSetting;
     this.terrain = new Terrain();
 
     const tankXs = [
@@ -283,6 +309,8 @@ class Game {
       power: 60,
       score: 0,
       weapon: 0,                 // index into WEAPON_LIST
+      sink: 0,                   // monsoon: pixels sunk into the mud
+      slide: 0,                  // iceage: sliding speed (pixels per second, + = right)
     }));
     // ammo[player][weapon] = shots left (one per time it was drafted)
     this.loadouts = loadouts || null;
@@ -293,12 +321,17 @@ class Game {
     this.moveLeft = MOVE_BUDGET; // driving allowance for this turn
     this.settleTime = 0;         // how long we have waited for loose dirt to fall
     this.moveDir = 0;            // -1 left, 0 stopped, 1 right (set by the controls)
+    this.turnMoved = 0;          // how far the current tank has driven this turn
+    this.drivingNow = false;
+    this.weatherEvents = [];     // lightning / meteors waiting to happen at the start of a turn
+    this.weatherClock = 0;
     this.turnNote = "";          // extra message for this turn ("Hopped!" etc.)
 
     this.current = 0;
     this.shotsFired = [0, 0];
     this.wind = Math.round((this.rand() * 2 - 1) * 10);
-    this.phase = "aim"; // "aim" -> "flight" -> "boom" -> "settle" -> "aim" ... -> "over"
+    if (this.weather === "hurricane") this.wind = this.hurricaneWind(this.rand() < 0.5 ? -1 : 1);
+    this.phase = "aim"; // "aim" -> "flight" -> "boom" -> "settle" -> ("weather" ->) "aim" ... -> "over"
     this.projs = [];        // all shells currently in the air
     this.explosions = [];   // explosion animations
     this.boomTimer = 0;
@@ -357,12 +390,14 @@ class Game {
   }
 
   // Drive up to `dist` pixels (one pixel at a time, following the ground). Returns how far it got.
-  driveTank(dir, dist) {
+  // sliding = true: the tank is skidding on ice, which costs no driving allowance.
+  driveTank(dir, dist, sliding) {
     const t = this.tank;
     const other = this.tanks[1 - this.current];
     let moved = 0;
-    while (moved < dist - 1e-9 && this.moveLeft > 1e-9) {
-      const step = Math.min(1, dist - moved, this.moveLeft);
+    if (t.sink > 0 && !sliding) { t.y -= t.sink; t.sink = 0; }   // monsoon: drive out of the mud
+    while (moved < dist - 1e-9 && (sliding || this.moveLeft > 1e-9)) {
+      const step = sliding ? Math.min(1, dist - moved) : Math.min(1, dist - moved, this.moveLeft);
       const nx = t.x + dir * step;
       if (nx < 15 || nx > W - 15) break;                       // edge of the map
       if (Math.abs(nx - other.x) < MIN_TANK_GAP) break;        // other tank in the way
@@ -370,10 +405,25 @@ class Game {
       if (t.y - top > CLIMB_LIMIT * step + 0.5) break;         // too steep to climb
       t.x = nx;
       t.y = top;
-      this.moveLeft -= step;
+      if (!sliding) this.moveLeft -= step;
       moved += step;
     }
+    if (!sliding && moved > 0) {
+      this.turnMoved += moved;
+      this.drivingNow = true;
+      if (this.weather === "iceage") t.slide = dir * MOVE_SPEED;  // ice: keeps rolling after you let go
+    }
     return moved;
+  }
+
+  // Iceage: a tank that stopped driving skids on for a moment
+  slideStep(dt) {
+    const t = this.tank;
+    if (Math.abs(t.slide) < 3) { t.slide = 0; return; }
+    const want = Math.abs(t.slide) * dt;
+    const moved = this.driveTank(Math.sign(t.slide), want, true);
+    if (moved < want - 1e-6) t.slide = 0;                     // hit a wall, a cliff or the other tank
+    else t.slide *= Math.exp(-SLIDE_DECAY * dt);
   }
 
   // The first weapon in the list that still has ammo
@@ -407,6 +457,7 @@ class Game {
     this.lastHit = "";
     this.turnNote = "";
     this.moveDir = 0;
+    t.slide = 0;
     this.usedWeapon = w;
     this.projs = [];
 
@@ -456,6 +507,8 @@ class Game {
       x = Math.max(20, Math.min(W - 20, x));
     }
     t.x = x;
+    t.sink = 0;
+    t.slide = 0;
     t.y = this.terrain.surfaceY(x, Math.max(0, fromY - 30));
     this.addExplosion(t.x, t.y - 6, 24, "dirt");
     this.settleTanks();
@@ -464,10 +517,12 @@ class Game {
   // Call this 60 times per second
   update(dt) {
     for (const e of this.explosions) e.t += dt;
+    this.drivingNow = false;
     if (this.phase === "aim" && this.isAiTurn) this.updateAi(dt);
     if (this.phase === "aim" && !this.isAiTurn && this.moveDir !== 0 && this.moveLeft > 0) {
       this.driveTank(this.moveDir, MOVE_SPEED * dt);
     }
+    if (this.phase === "aim" && this.weather === "iceage" && !this.drivingNow) this.slideStep(dt);
 
     if (this.phase === "flight") {
       for (const p of this.projs.slice()) this.updateProjectile(p, dt);
@@ -496,6 +551,8 @@ class Game {
       this.fall();
       this.settleTime += dt;
       if (this.terrain.unstable.size === 0 || this.settleTime >= SETTLE_MAX) this.endTurn();
+    } else if (this.phase === "weather") {
+      this.updateWeather(dt);
     }
   }
 
@@ -604,6 +661,15 @@ class Game {
     p.x = p.lastX;
     p.y = p.lastY;
     p.bouncesLeft--;
+    if (this.weather === "iceage") {
+      // Ice: shells shoot off in random directions at random speeds
+      const old = Math.hypot(p.vx, p.vy);
+      const ang = Math.atan2(p.vy, p.vx) + (this.rand() * 2 - 1) * 1.0;
+      const fast = Math.min(700, Math.max(140, old * (0.9 + this.rand() * 0.7)));
+      p.vx = Math.cos(ang) * fast;
+      p.vy = Math.sin(ang) * fast;
+      if (p.vy > 0 && this.rand() < 0.6) p.vy = -p.vy * 0.8;   // mostly bounce upward, not into the ground again
+    }
     const speed = Math.hypot(p.vx, p.vy);
     if (speed > 100) this.terrain.carveCircle(p.x - nx * 3, p.y - ny * 3, 5); // little dent
     if (!p.w.fuse && speed < 40) this.detonate(p);
@@ -765,8 +831,10 @@ class Game {
   // Tanks drop down if the ground vanishes, and ride up if dirt piles under them
   settleTanks() {
     for (const t of this.tanks) {
+      t.y -= t.sink;                                  // find the surface, then sink back into the mud
       while (t.y > 0 && this.terrain.isSolid(t.x, t.y - 6)) t.y--;
       while (t.y < H && !this.terrain.isSolid(t.x, t.y + 1)) t.y++;
+      t.y += t.sink;
     }
   }
 
@@ -777,15 +845,99 @@ class Game {
       this.phase = "over";
       return;
     }
+    // Monsoon: a tank that sat still this turn sinks deeper into the mud
+    if (this.weather === "monsoon" && this.turnMoved < 1) {
+      const t = this.tank;
+      const d = Math.min(SINK_PER_TURN, SINK_MAX - t.sink);
+      if (d > 0) { t.sink += d; t.y += d; }
+    }
     this.current = 1 - this.current;
     this.moveLeft = MOVE_BUDGET;
+    this.turnMoved = 0;
     this.moveDir = 0;
     this.changeWind();
-    this.phase = "aim";
+    this.beginWeather();
+  }
+
+  // ---- Weather that happens between turns (thunderstorm, apocalypse) ----
+  hurricaneWind(sign) {
+    return sign * Math.round(HURRICANE_WIND[0] + this.rand() * (HURRICANE_WIND[1] - HURRICANE_WIND[0]));
+  }
+
+  // Where does a bolt or meteor land? Mostly anywhere, sometimes right around a tank.
+  pickStrikeX(tankBias) {
+    if (this.rand() < tankBias) {
+      const t = this.tanks[this.rand() < 0.5 ? 0 : 1];
+      return Math.max(20, Math.min(W - 20, t.x + (this.rand() * 2 - 1) * 20));
+    }
+    return 30 + this.rand() * (W - 60);
+  }
+
+  // Line up this turn's lightning / meteors. With none, go straight to the aiming phase.
+  beginWeather() {
+    this.weatherEvents = [];
+    this.weatherClock = 0;
+    if (this.weather === "thunderstorm") {
+      const n = 1 + (this.rand() < 0.5 ? 1 : 0);
+      for (let i = 0; i < n; i++) {
+        this.weatherEvents.push({ kind: "strike", at: 0.5 + i * 0.9 + this.rand() * 0.3, x: this.pickStrikeX(BOLT_AIM_BIAS), done: false });
+      }
+      this.lastHit = "Thunderstorm!";
+    } else if (this.weather === "apocalypse") {
+      const n = 3 + (this.rand() < 0.5 ? 1 : 0);
+      for (let i = 0; i < n; i++) {
+        this.weatherEvents.push({ kind: "meteor", at: METEOR_FALL_TIME + 0.15 + i * 0.5 + this.rand() * 0.2, x: this.pickStrikeX(METEOR_AIM_BIAS), done: false });
+      }
+      this.lastHit = "Meteor shower!";
+    }
+    this.settleTime = 0;
+    this.phase = this.weatherEvents.length ? "weather" : "aim";
+  }
+
+  updateWeather(dt) {
+    this.weatherClock += dt;
+    this.fall();
+    let lastAt = 0;
+    for (const e of this.weatherEvents) {
+      lastAt = Math.max(lastAt, e.at);
+      if (!e.done && this.weatherClock >= e.at) { e.done = true; this.resolveWeatherEvent(e); }
+    }
+    // everything has landed: wait a moment, let loose dirt fall, then it is time to aim
+    if (this.weatherClock >= lastAt + 0.8) {
+      this.settleTime += dt;
+      if (this.terrain.unstable.size === 0 || this.settleTime >= SETTLE_MAX) {
+        this.weatherEvents = [];
+        this.phase = "aim";
+      }
+    }
+  }
+
+  resolveWeatherEvent(e) {
+    const meteor = e.kind === "meteor";
+    const reach = meteor ? METEOR_REACH : STRIKE_REACH;
+    const victimIndex = this.tanks.findIndex((t) => Math.abs(e.x - t.x) <= reach);
+    const victim = victimIndex >= 0 ? this.tanks[victimIndex] : null;
+    const ground = this.terrain.surfaceY(e.x, 0);
+    if (meteor) {
+      this.terrain.carveCircle(e.x, ground + 2, METEOR_BLAST);
+      this.addExplosion(e.x, victim ? victim.y - 8 : ground, METEOR_BLAST + 6, "meteor");
+    } else {
+      if (!victim) this.terrain.carveCircle(e.x, ground + 2, 9);
+      this.addExplosion(e.x, victim ? victim.y - 14 : ground, 22, "bolt");
+    }
+    if (victim) {
+      victim.score -= STRIKE_DAMAGE;
+      this.lastHit = (meteor ? "Meteor" : "Lightning") + " hit " + this.playerName(victimIndex) + "! -" + STRIKE_DAMAGE;
+    }
+    this.settleTanks();
   }
 
   // Wind changes every turn: usually a small nudge, sometimes a big gust
   changeWind() {
+    if (this.weather === "hurricane") {           // a hurricane always turns around
+      this.wind = this.hurricaneWind(this.wind > 0 ? -1 : 1);
+      return;
+    }
     if (this.rand() < 0.3) {
       this.wind = Math.round((this.rand() * 2 - 1) * WIND_MAX);
     } else {
@@ -817,6 +969,7 @@ class Game {
       if (moved < 1e-6 || (t.x - plan.targetX) * plan.dir >= -0.5) plan.dir = 0;
       return;
     }
+    if (Math.abs(t.slide) > 3) return;     // still sliding on the ice: wait until it stops
 
     // Step 3: work out the shot from where the tank ended up
     if (!plan.shot) {
@@ -850,6 +1003,13 @@ class Game {
   // Decide weapon-independent: if no good shot exists from here, look for a better spot within driving range
   aiDecideMove(weaponIndex) {
     const difficulty = this.ai[this.current];
+    if (this.weather === "monsoon" && this.tank.sink > 0) {   // stuck in the mud: wiggle free
+      const toward = this.tanks[1 - this.current].x > this.tank.x ? 1 : -1;
+      for (const d of [toward, -toward]) {
+        const probe = this.probeDrive(d, 8);
+        if (probe.moved >= 4) return { dir: d, dist: probe.moved };
+      }
+    }
     const chance = difficulty === "easy" ? 0.4 : difficulty === "normal" ? 0.75 : 1;
     if (this.moveLeft < 10 || this.rand() > chance) return null;
     const w = WEAPON_LIST[weaponIndex];
@@ -877,12 +1037,16 @@ class Game {
   // Where would the tank end up if it drove? (Doesn't actually move it.)
   probeDrive(dir, dist) {
     const t = this.tank;
-    const saved = { x: t.x, y: t.y, left: this.moveLeft };
+    const saved = { x: t.x, y: t.y, left: this.moveLeft, sink: t.sink, slide: t.slide, turnMoved: this.turnMoved, driving: this.drivingNow };
     const moved = this.driveTank(dir, dist);
     const result = { x: t.x, y: t.y, moved: moved };
     t.x = saved.x;
     t.y = saved.y;
+    t.sink = saved.sink;
+    t.slide = saved.slide;
     this.moveLeft = saved.left;
+    this.turnMoved = saved.turnMoved;
+    this.drivingNow = saved.driving;
     return result;
   }
 
@@ -1009,5 +1173,5 @@ function aiDraftPick(myPicks, rand) {
 
 // Lets the test script load this file in Node (ignored in the browser)
 if (typeof module !== "undefined") {
-  module.exports = { Game, Terrain, aiDraftPick, WEAPONS: WEAPON_LIST, AI_ERROR, stepProjectile, makeRng, W, H, STEP, TANK_RADIUS, SHOTS_PER_PLAYER };
+  module.exports = { Game, Terrain, aiDraftPick, SEASONS, WEAPONS: WEAPON_LIST, AI_ERROR, stepProjectile, makeRng, W, H, STEP, TANK_RADIUS, SHOTS_PER_PLAYER };
 }
