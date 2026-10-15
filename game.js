@@ -11,6 +11,8 @@ const H = 540;                 // game height in pixels
 const GRAVITY = 400;           // how fast shells fall (pixels per second squared)
 const WIND_ACCEL = 2.5;        // how strongly wind pushes a shell
 const SPEED_PER_POWER = 6.2;   // power 100 = 620 pixels per second
+const BARREL_PIVOT = 15;        // the barrel turns around a point this high above the ground
+const BARREL_LENGTH = 24;       // and shells leave from this far along it
 const TANK_RADIUS = 14;        // size of a tank for hit detection
 const SHOTS_PER_PLAYER = 10;   // match length
 const WIND_MAX = 20;           // strongest possible wind (either direction)
@@ -48,12 +50,27 @@ function makeRng(seed) {
 }
 
 // ---- Terrain: a grid with one byte per pixel (1 = dirt, 0 = air) -----
+let explosionCounter = 0; // every explosion gets a number, so the effects code can tell new ones
 let versionCounter = 0; // every terrain change gets a new number, so main.js knows when to repaint
 class Terrain {
   constructor() {
     this.mask = new Uint8Array(W * H);
     this.version = ++versionCounter;
+    this.dirtyX0 = 0;          // columns that changed since the picture was last painted
+    this.dirtyX1 = W - 1;      // (main.js repaints only these, then calls clearDirty)
     this.unstable = new Set(); // columns that might have loose dirt (checked and dropped when stable)
+  }
+
+  // The terrain changed in columns x0..x1: bump the version and remember the area to repaint
+  touch(x0, x1) {
+    this.dirtyX0 = Math.max(0, Math.min(this.dirtyX0, Math.floor(x0) - 3));
+    this.dirtyX1 = Math.min(W - 1, Math.max(this.dirtyX1, Math.ceil(x1) + 3));
+    this.version = ++versionCounter;
+  }
+
+  clearDirty() {
+    this.dirtyX0 = W;
+    this.dirtyX1 = -1;
   }
 
   // Remember that columns x0..x1 changed, so any dirt left hanging there should fall
@@ -66,6 +83,7 @@ class Terrain {
   // Returns true if anything moved.
   settleStep(speed) {
     let moved = false;
+    let lo = W, hi = -1;
     for (const x of this.unstable) {
       let columnMoved = false;
       for (let pass = 0; pass < speed; pass++) {
@@ -82,10 +100,10 @@ class Terrain {
         if (!m) break;
         columnMoved = true;
       }
-      if (columnMoved) moved = true;
+      if (columnMoved) { moved = true; lo = Math.min(lo, x); hi = Math.max(hi, x); }
       else this.unstable.delete(x);
     }
-    if (moved) this.version = ++versionCounter;
+    if (moved) this.touch(lo, hi);
     return moved;
   }
 
@@ -110,7 +128,7 @@ class Terrain {
       }
     }
     this.markUnstable(minX, maxX);
-    this.version = ++versionCounter;
+    this.touch(minX, maxX);
   }
 
   // Pile a heap of dirt on top of the ground (used by the Slag Heap)
@@ -122,7 +140,7 @@ class Terrain {
       for (let y = Math.max(0, top - height); y < top; y++) this.mask[y * W + x] = 1;
     }
     this.markUnstable(cx - r, cx + r);
-    this.version = ++versionCounter;
+    this.touch(cx - r, cx + r);
   }
 
   // Dig a rectangular hole (used by Post Hole)
@@ -133,7 +151,7 @@ class Terrain {
       }
     }
     this.markUnstable(x0, x0 + w);
-    this.version = ++versionCounter;
+    this.touch(x0, x0 + w);
   }
 
   // Grow a wall of dirt upward from the ground (used by Scrap Wall).
@@ -145,7 +163,7 @@ class Terrain {
       for (let y = Math.max(0, top - height); y < top; y++) this.mask[y * W + x] = 1;
     }
     this.markUnstable(cx - width / 2, cx + width / 2);
-    this.version = ++versionCounter;
+    this.touch(cx - width / 2, cx + width / 2);
   }
 
   // Find the first dirt pixel going downward from fromY
@@ -206,7 +224,7 @@ class Terrain {
       const height = Math.max(60, Math.min(H - 80, Math.round(h[x])));
       for (let y = H - height; y < H; y++) this.mask[y * W + x] = 1;
     }
-    this.version = ++versionCounter;
+    this.touch(0, W - 1);
   }
 }
 
@@ -308,7 +326,7 @@ class Game {
   // Where the barrel ends (the shell starts here)
   barrelTip(t) {
     const a = (t.angle * Math.PI) / 180;
-    return { x: t.x + Math.cos(a) * 20, y: t.y - 8 - Math.sin(a) * 20 };
+    return { x: t.x + Math.cos(a) * BARREL_LENGTH, y: t.y - BARREL_PIVOT - Math.sin(a) * BARREL_LENGTH };
   }
 
   setAngle(deg, force) {
@@ -416,7 +434,7 @@ class Game {
   hopTank(t, speed) {
     const a = (t.angle * Math.PI) / 180;
     const p = { x: t.x, y: t.y - 14, lastX: t.x, lastY: t.y - 14, vx: Math.cos(a) * speed, vy: -Math.sin(a) * speed };
-    this.explosions.push({ x: t.x, y: t.y - 6, r: 24, t: 0, kind: "dirt" });
+    this.addExplosion(t.x, t.y - 6, 24, "dirt");
     let result = "flying";
     for (let i = 0; i < 1500 && result === "flying"; i++) {
       result = stepProjectile(p, STEP, this.wind, this.terrain, []);
@@ -439,7 +457,7 @@ class Game {
     }
     t.x = x;
     t.y = this.terrain.surfaceY(x, Math.max(0, fromY - 30));
-    this.explosions.push({ x: t.x, y: t.y - 6, r: 24, t: 0, kind: "dirt" });
+    this.addExplosion(t.x, t.y - 6, 24, "dirt");
     this.settleTanks();
   }
 
@@ -555,6 +573,11 @@ class Game {
     }
   }
 
+  // Record an explosion animation (main.js draws it and spawns sparks; the id lets it spot new ones)
+  addExplosion(x, y, r, kind) {
+    this.explosions.push({ id: ++explosionCounter, x: x, y: y, r: r, t: 0, kind: kind });
+  }
+
   // A small shell made from a weapon's "split / burst / rain" settings
   fragment(spec, color) {
     return { name: "fragment", blast: spec.blast, damage: spec.damage, color: color };
@@ -636,14 +659,14 @@ class Game {
 
     if (w.dirt) {
       this.terrain.addHeap(x, w.dirt);
-      this.explosions.push({ x: x, y: y, r: w.dirt, t: 0, kind: "dirt" });
+      this.addExplosion(x, y, w.dirt, "dirt");
       this.turnNote = "Dirt piled up!";
       this.settleTanks();
       return;
     }
     if (w.wall) {
       this.terrain.addWall(x, w.wall.height, w.wall.width, this.tanks.map((t) => t.x));
-      this.explosions.push({ x: x, y: y, r: 30, t: 0, kind: "dirt" });
+      this.addExplosion(x, y, 30, "dirt");
       this.turnNote = "Wall built!";
       this.settleTanks();
       return;
@@ -735,7 +758,7 @@ class Game {
       });
     }
 
-    if (blast > 0) this.explosions.push({ x: x, y: y, r: blast, t: 0, kind: "fire" });
+    if (blast > 0) this.addExplosion(x, y, blast, "fire");
     this.settleTanks();
   }
 

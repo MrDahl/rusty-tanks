@@ -17,6 +17,7 @@ const fireButton = document.getElementById("fire");
 const newButton = document.getElementById("newgame");
 const guideBox = document.getElementById("guide");
 const weaponSelect = document.getElementById("weapon");
+const fxBox = document.getElementById("fx");
 
 // Menu choices (what the player picked on the menu)
 const settings = { mode: "cpu", difficulty: "normal" };
@@ -33,234 +34,259 @@ function aiSetting() {
 
 let game = new Game(undefined, aiSetting());
 
-// ---- Colours (the "rusty" look lives here) ---------------------------
+// ---- Colours ----------------------------------------------------------
+// (the neon palette lives in fx.js)
 const COLORS = {
-  tanks: ["#7fa6b3", "#d9a441"],
-  tankDark: "#2b2b2b",
-  text: "#f2e6d0",
-  textDim: "#b9a88c",
+  tanks: [NEON.cyan, NEON.magenta],
+  text: "#cfe8ff",
+  textDim: "#7f9cc4",
 };
+const FONT = "'Press Start 2P', 'Courier New', monospace";
+try { if (document.fonts) document.fonts.load("12px 'Press Start 2P'"); } catch (e) { /* font is optional */ }
 
-// ---- Terrain is painted once into a hidden canvas, then reused -------
+// ---- The ground: pixel-art rock -----------------------------------------
+// Painted into a hidden picture and only re-painted where the ground changed.
 const terrainCanvas = document.createElement("canvas");
 terrainCanvas.width = W;
 terrainCanvas.height = H;
 const terrainCtx = terrainCanvas.getContext("2d");
+const terrainImg = terrainCtx.createImageData(W, H);
 let paintedVersion = -1;
 
+const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const ROCK = NEON.rock.map(hex);      // darkest .. lightest
+const CRACK = hex(NEON.crack);
+const RIM = hex(NEON.rim);
+const RIM2 = [74, 112, 190];
+
+// Jagged cracks in the rock, worked out once. They are fixed to the screen, like a texture.
+const crackMask = new Uint8Array(W * H);
+(function makeCracks() {
+  const rand = makeRng(12345);
+  const dot = (x, y) => { // 2x2 blocks give the chunky pixel-art look
+    const bx = (x >> 1) << 1, by = (y >> 1) << 1;
+    for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+      if (bx + dx >= 0 && bx + dx < W && by + dy >= 0 && by + dy < H) crackMask[(by + dy) * W + bx + dx] = 1;
+    }
+  };
+  const walk = (x, y, ang, len, level) => {
+    for (let i = 0; i < len; i++) {
+      dot(x, y);
+      ang += (rand() - 0.5) * 0.7;
+      x += Math.cos(ang) * 2;
+      y += Math.sin(ang) * 2;
+      if (level < 2 && rand() < 0.035) walk(x, y, ang + (rand() < 0.5 ? -1 : 1) * (0.6 + rand() * 0.6), Math.floor(len * 0.5), level + 1);
+    }
+  };
+  for (let i = 0; i < 40; i++) walk(rand() * W, 120 + rand() * 420, rand() * Math.PI * 2, 30 + Math.floor(rand() * 60), 0);
+})();
+
+// A repeatable pseudo-random number for a pixel block (so the speckles don't flicker)
+function blockNoise(x, y) {
+  let h = Math.imul(x, 374761393) + Math.imul(y, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
 function paintTerrain() {
-  const img = terrainCtx.createImageData(W, H);
-  const data = img.data;
-  const mask = game.terrain.mask;
-  for (let x = 0; x < W; x++) {
-    let depth = 0; // how far below the surface this pixel is
+  const t = game.terrain;
+  const x0 = Math.max(0, t.dirtyX0), x1 = Math.min(W - 1, t.dirtyX1);
+  const mask = t.mask, data = terrainImg.data;
+  const air = (x, y) => x >= 0 && x < W && y >= 0 && mask[y * W + x] !== 1;
+  for (let x = x0; x <= x1; x++) {
+    let depth = 0; // how far below the nearest air above this pixel is
     for (let y = 0; y < H; y++) {
-      if (mask[y * W + x] !== 1) {
-        depth = 0;
-        continue;
+      const p = y * W + x, i = p * 4;
+      if (mask[p] !== 1) { depth = 0; data[i + 3] = 0; continue; }
+      let c;
+      const edge = air(x - 1, y) || air(x + 1, y) || air(x - 2, y) || air(x + 2, y);
+      if (depth < 2 || edge) c = RIM;                                  // bright outline
+      else if (depth < 5 || air(x - 4, y) || air(x + 4, y)) c = RIM2;   // soft inner glow
+      else {
+        const band = depth < 16 ? 3 : depth < 48 ? 2 : depth < 120 ? 1 : 0;   // lighter near the top
+        const n = blockNoise(x >> 1, y >> 1);
+        const b = Math.max(0, Math.min(3, band + (n < 0.07 ? 1 : n > 0.95 ? -1 : 0)));
+        c = crackMask[p] && depth > 8 ? CRACK : ROCK[b];
       }
-      const i = (y * W + x) * 4;
-      const grain = ((x * 7 + y * 13) % 11) - 5; // tiny speckle
-      let r, g, b;
-      if (depth < 4) {
-        r = 190; g = 92; b = 44;                  // bright rusty top layer
-      } else {
-        const dark = Math.min(1, depth / 260);    // darker the deeper it goes
-        r = 150 - 70 * dark;
-        g = 74 - 40 * dark;
-        b = 38 - 18 * dark;
-      }
-      data[i] = r + grain;
-      data[i + 1] = g + grain * 0.6;
-      data[i + 2] = b + grain * 0.4;
-      data[i + 3] = 255;
+      data[i] = c[0]; data[i + 1] = c[1]; data[i + 2] = c[2]; data[i + 3] = 255;
       depth++;
     }
   }
-  terrainCtx.putImageData(img, 0, 0);
-  paintedVersion = game.terrain.version;
+  terrainCtx.putImageData(terrainImg, 0, 0, x0, 0, x1 - x0 + 1, H);
+  t.clearDirty();
+  paintedVersion = t.version;
 }
 
-// ---- Drawing helpers --------------------------------------------------
-function drawSky() {
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "#2a1d1a");
-  g.addColorStop(0.6, "#7a3d2a");
-  g.addColorStop(1, "#d98a4a");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  // a hazy sun
-  ctx.fillStyle = "rgba(255, 214, 150, 0.35)";
-  ctx.beginPath();
-  ctx.arc(W * 0.5, H * 0.62, 70, 0, Math.PI * 2);
-  ctx.fill();
-}
-
+// ---- Tanks: glowing neon pixel tanks --------------------------------------
 function drawTank(t, index, active) {
-  const x = t.x;
-  const y = t.y;
   const color = COLORS.tanks[index];
-
-  // barrel
+  const x = Math.round(t.x), y = Math.round(t.y);
   const a = (t.angle * Math.PI) / 180;
-  ctx.strokeStyle = COLORS.tankDark;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = active ? 18 : 10;
+
+  // barrel (turns around the same point the shells fly out from)
+  ctx.strokeStyle = color;
   ctx.lineWidth = 5;
-  ctx.lineCap = "round";
+  ctx.lineCap = "butt";
   ctx.beginPath();
-  ctx.moveTo(x, y - 9);
-  ctx.lineTo(x + Math.cos(a) * 20, y - 9 - Math.sin(a) * 20);
+  ctx.moveTo(0, -BARREL_PIVOT);
+  ctx.lineTo(Math.cos(a) * BARREL_LENGTH, -BARREL_PIVOT - Math.sin(a) * BARREL_LENGTH);
   ctx.stroke();
 
-  // tracks
-  ctx.fillStyle = COLORS.tankDark;
-  ctx.fillRect(x - 15, y - 6, 30, 7);
-  // body
+  // body, drawn 1.3x bigger than the basic pixel design
+  ctx.scale(1.3, 1.3);
+  ctx.fillStyle = "#08102a";
+  ctx.fillRect(-15, -6, 30, 6);              // tracks
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-14, -5, 28, 4);
   ctx.fillStyle = color;
-  ctx.fillRect(x - 12, y - 12, 24, 7);
-  // turret
-  ctx.beginPath();
-  ctx.arc(x, y - 12, 7, Math.PI, 0);
+  for (let i = 0; i < 5; i++) ctx.fillRect(-12 + i * 6, -4, 2, 2); // wheels
+  ctx.fillRect(-12, -12, 24, 6);             // hull
+  ctx.fillStyle = "#08102a";
+  ctx.fillRect(-10, -10, 20, 2);
+  ctx.fillStyle = color;
+  ctx.beginPath();                           // turret
+  ctx.arc(0, -12, 7, Math.PI, 0);
   ctx.fill();
+  ctx.fillStyle = "#08102a";
+  ctx.fillRect(-3, -15, 6, 2);
+  ctx.restore();
 
-  // little arrow above the active tank
+  // bobbing arrow above the tank whose turn it is
   if (active && game.phase === "aim") {
-    ctx.fillStyle = COLORS.text;
-    ctx.beginPath();
-    ctx.moveTo(x, y - 40);
-    ctx.lineTo(x - 6, y - 50);
-    ctx.lineTo(x + 6, y - 50);
-    ctx.closePath();
-    ctx.fill();
+    const bob = Math.round(Math.sin(FX.time * 6) * 2);
+    ctx.fillStyle = color;
+    ctx.fillRect(x - 1, y - 56 + bob, 3, 6);
+    ctx.fillRect(x - 3, y - 50 + bob, 7, 2);
+    ctx.fillRect(x - 1, y - 48 + bob, 3, 2);
   }
 }
 
 function drawAimGuide() {
   if (!guideBox.checked || game.phase !== "aim" || game.isAiTurn || menuOpen) return;
-  const pts = game.predictPath(120); // about 2 seconds of flight
-  ctx.fillStyle = "rgba(242, 230, 208, 0.75)";
+  const pts = game.predictPath(140);
+  ctx.globalCompositeOperation = "lighter";
   for (let i = 4; i < pts.length; i += 5) {
-    ctx.fillRect(pts[i].x - 1.5, pts[i].y - 1.5, 3, 3);
+    const k = 1 - (i / pts.length) * 0.6;
+    ctx.globalAlpha = 0.18 * k;
+    ctx.fillStyle = "#7dffd8";
+    ctx.fillRect(Math.round(pts[i].x) - 4, Math.round(pts[i].y) - 4, 9, 9);
+    ctx.globalAlpha = 0.9 * k;
+    ctx.fillRect(Math.round(pts[i].x) - 1, Math.round(pts[i].y) - 1, 3, 3);
   }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
 }
 
-function drawExplosions() {
-  for (const e of game.explosions) {
-    const k = Math.min(1, e.t / BOOM_TIME);
-    const r = e.r * (0.4 + 0.9 * Math.min(1, k * 3));
-    const alpha = 1 - k;
-    const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, r);
-    if (e.kind === "dirt") {
-      g.addColorStop(0, "rgba(200, 140, 90, " + alpha * 0.8 + ")");
-      g.addColorStop(1, "rgba(120, 70, 40, 0)");
-    } else {
-      g.addColorStop(0, "rgba(255, 245, 200, " + alpha + ")");
-      g.addColorStop(0.5, "rgba(255, 140, 40, " + alpha * 0.9 + ")");
-      g.addColorStop(1, "rgba(120, 30, 10, 0)");
-    }
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
+// ---- The scoreboard and messages (arcade text) -----------------------------
+function neonText(str, x, y, color, size, align) {
+  ctx.font = size + "px " + FONT;
+  ctx.textAlign = align || "left";
+  ctx.textBaseline = "top";
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = color;
+  ctx.fillText(str, x, y);
+  ctx.shadowBlur = 0;
+  ctx.fillText(str, x, y);
 }
 
-function drawShells() {
-  for (const p of game.projs) {
-    if (p.delay > 0) continue; // volley/rain shells that haven't launched yet
-    const small = p.w.name === "fragment";
-    ctx.fillStyle = p.w.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, small ? 2.5 : 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = COLORS.text;
-    ctx.lineWidth = 1;
-    ctx.stroke();
+// Shrink the text until it fits in maxWidth
+function fitSize(str, size, maxWidth) {
+  ctx.font = size + "px " + FONT;
+  while (size > 6 && ctx.measureText(str).width > maxWidth) {
+    size--;
+    ctx.font = size + "px " + FONT;
   }
+  return size;
 }
 
 function shortName(i) {
   if (!game.ai[i]) return "P" + (i + 1);
-  return "CPU (" + game.ai[i] + ")";
+  return "CPU-" + game.ai[i].toUpperCase();
 }
 
 function drawHud() {
-  ctx.font = "bold 20px 'Courier New', monospace";
-  ctx.textBaseline = "top";
-
-  // scores
-  ctx.textAlign = "left";
-  ctx.fillStyle = COLORS.tanks[0];
-  ctx.fillText(shortName(0) + "  " + game.tanks[0].score, 16, 12);
-  ctx.textAlign = "right";
-  ctx.fillStyle = COLORS.tanks[1];
-  ctx.fillText(game.tanks[1].score + "  " + shortName(1), W - 16, 12);
-
-  // shots left
-  ctx.font = "14px 'Courier New', monospace";
-  ctx.fillStyle = COLORS.textDim;
-  ctx.textAlign = "left";
-  ctx.fillText("shots left: " + (game.shotLimit - game.shotsFired[0]), 16, 38);
-  ctx.textAlign = "right";
-  ctx.fillText("shots left: " + (game.shotLimit - game.shotsFired[1]), W - 16, 38);
+  ctx.save();
+  // scores, shots left
+  for (let i = 0; i < 2; i++) {
+    const right = i === 1;
+    const x = right ? W - 18 : 18;
+    const al = right ? "right" : "left";
+    const live = game.current === i && game.phase !== "over";
+    ctx.globalAlpha = live ? 1 : 0.6;
+    neonText(shortName(i), x, 12, COLORS.tanks[i], 11, al);
+    neonText(String(game.tanks[i].score), x, 30, COLORS.tanks[i], 22, al);
+    neonText("SHOTS " + (game.shotLimit - game.shotsFired[i]), x, 60, COLORS.textDim, 9, al);
+  }
+  ctx.globalAlpha = 1;
 
   // wind
-  ctx.textAlign = "center";
-  ctx.fillStyle = COLORS.text;
-  ctx.font = "bold 16px 'Courier New', monospace";
+  neonText("WIND", W / 2, 12, COLORS.textDim, 10, "center");
   const w = game.wind;
-  ctx.fillText("WIND " + (w === 0 ? "calm" : Math.abs(w)), W / 2, 12);
-  if (w !== 0) {
-    const len = Math.abs(w) * 3;
-    const dir = Math.sign(w);
-    const cx = W / 2;
-    const cy = 42;
-    ctx.strokeStyle = COLORS.text;
+  if (w === 0) {
+    neonText("CALM", W / 2, 30, COLORS.text, 14, "center");
+  } else {
+    const len = Math.abs(w) * 3, dir = Math.sign(w), cx = W / 2, cy = 38;
+    ctx.strokeStyle = NEON.green;
+    ctx.shadowColor = NEON.green;
+    ctx.shadowBlur = 8;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(cx - (dir * len) / 2, cy);
     ctx.lineTo(cx + (dir * len) / 2, cy);
-    ctx.lineTo(cx + (dir * len) / 2 - dir * 8, cy - 5);
     ctx.moveTo(cx + (dir * len) / 2, cy);
-    ctx.lineTo(cx + (dir * len) / 2 - dir * 8, cy + 5);
+    ctx.lineTo(cx + (dir * len) / 2 - dir * 9, cy - 6);
+    ctx.moveTo(cx + (dir * len) / 2, cy);
+    ctx.lineTo(cx + (dir * len) / 2 - dir * 9, cy + 6);
     ctx.stroke();
+    ctx.shadowBlur = 0;
+    neonText(String(Math.abs(w)), W / 2, 50, COLORS.text, 9, "center");
   }
 
-  // message and turn
-  ctx.font = "bold 18px 'Courier New', monospace";
+  // turn message, weapon
   if (game.phase === "aim") {
-    ctx.fillStyle = COLORS.tanks[game.current];
-    ctx.fillText(game.isAiTurn ? "Computer is thinking..." : game.playerName(game.current) + ", take aim!", W / 2, 66);
-    ctx.font = "14px 'Courier New', monospace";
-    ctx.fillStyle = COLORS.textDim;
-    ctx.fillText(game.weapon.name + " - " + game.weapon.info, W / 2, 90);
-    if (!game.isAiTurn) ctx.fillText("Drive left: " + Math.round(game.moveLeft) + " px  (A / D)", W / 2, 110);
-  } else if (game.lastHit) {
-    ctx.fillStyle = COLORS.text;
-    ctx.fillText(game.lastHit, W / 2, 66);
+    const msg = game.isAiTurn ? "COMPUTER IS THINKING..." : game.playerName(game.current).toUpperCase() + " - TAKE AIM";
+    neonText(msg, W / 2, 74, COLORS.tanks[game.current], 12, "center");
+    const wp = game.weapon;
+    const line = wp.name.toUpperCase() + " - " + wp.info;
+    neonText(line, W / 2, 96, COLORS.text, fitSize(line, 9, W - 330), "center");
+    if (!game.isAiTurn) neonText("DRIVE LEFT " + Math.round(game.moveLeft) + "  (A / D)", W / 2, 114, COLORS.textDim, 8, "center");
+  } else if (game.lastHit && game.phase !== "over") {
+    neonText(game.lastHit.toUpperCase(), W / 2, 76, NEON.amber, 13, "center");
   }
 
   if (game.phase === "over") {
-    ctx.fillStyle = "rgba(20, 12, 10, 0.75)";
-    ctx.fillRect(0, H / 2 - 70, W, 140);
-    ctx.fillStyle = COLORS.text;
-    ctx.font = "bold 44px 'Courier New', monospace";
-    ctx.textBaseline = "middle";
-    ctx.fillText(game.winnerText(), W / 2, H / 2 - 14);
-    ctx.font = "18px 'Courier New', monospace";
-    ctx.fillStyle = COLORS.textDim;
-    ctx.fillText("New Game (N) to play again, Menu (Esc) to change settings", W / 2, H / 2 + 30);
+    ctx.fillStyle = "rgba(4, 6, 20, 0.78)";
+    ctx.fillRect(0, H / 2 - 80, W, 160);
+    const a = game.tanks[0].score, b = game.tanks[1].score;
+    const col = a === b ? NEON.amber : COLORS.tanks[a > b ? 0 : 1];
+    neonText(game.winnerText().toUpperCase(), W / 2, H / 2 - 44, col, 30, "center");
+    neonText(a + "  -  " + b, W / 2, H / 2 + 2, COLORS.text, 16, "center");
+    neonText("N = REMATCH    ESC = MENU", W / 2, H / 2 + 38, COLORS.textDim, 10, "center");
   }
+  ctx.restore();
 }
 
 function draw() {
   if (paintedVersion !== game.terrain.version) paintTerrain();
-  drawSky();
+  ctx.save();
+  const s = FX.shakeOffset();
+  ctx.translate(s.x, s.y);
+  FX.drawBackdrop(ctx);
   ctx.drawImage(terrainCanvas, 0, 0);
   game.tanks.forEach((t, i) => drawTank(t, i, i === game.current));
   drawAimGuide();
-  drawShells();
-  drawExplosions();
-  drawHud();
+  FX.drawShells(ctx, game.projs);
+  FX.drawExplosions(ctx, game);
+  FX.drawParticles(ctx);
+  FX.drawRain(ctx, game.wind);
+  ctx.restore();
+  if (!menuOpen) drawHud();
 }
 
 // ---- Menu ----------------------------------------------------------------
@@ -331,7 +357,7 @@ function buildWeaponGrid() {
   WEAPONS.forEach((w, i) => {
     const b = document.createElement("button");
     b.className = "wcard";
-    b.style.borderLeftColor = w.color;
+    b.style.borderLeftColor = lighten(w.color, 0.55);
     b.innerHTML = "<b></b><span></span>";
     b.firstChild.textContent = w.name;
     b.lastChild.textContent = w.info;
@@ -485,6 +511,16 @@ weaponSelect.addEventListener("change", () => {
 });
 fireButton.addEventListener("click", () => game.fire());
 
+// Retro FX: rain, lightning and scanlines can be switched off (remembered between visits)
+function applyFx() {
+  FX.enabled = fxBox.checked;
+  document.getElementById("stage").classList.toggle("crt", fxBox.checked);
+  try { localStorage.setItem("rustyTanksFx", fxBox.checked ? "1" : "0"); } catch (e) { /* not saved */ }
+}
+try { if (localStorage.getItem("rustyTanksFx") === "0") fxBox.checked = false; } catch (e) { /* default: on */ }
+fxBox.addEventListener("change", applyFx);
+applyFx();
+
 // Driving: hold a button (or the A / D key) to drive
 function holdToDrive(button, dir) {
   const start = (e) => { e.preventDefault(); game.setMoveDir(dir); };
@@ -540,8 +576,10 @@ window.addEventListener("keydown", (e) => {
 let last = performance.now();
 let leftover = 0;
 function frame(now) {
-  leftover += Math.min(0.1, (now - last) / 1000);
+  const elapsed = Math.min(0.1, (now - last) / 1000);
+  leftover += elapsed;
   last = now;
+  FX.update(elapsed, game);
   while (leftover >= STEP) {
     if (!menuOpen) game.update(STEP);
     leftover -= STEP;

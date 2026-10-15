@@ -19,4 +19,5 @@ Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = dr
 - `index.html`: page layout and styling
 - `weapons.js`: the list of weapons (copy a line to invent a new one)
 - `game.js`: the rules (terrain, physics, wind, scoring, turns, computer opponent)
+- `fx.js`: the neon arcade effects (night city, rain, lightning, sparks, glowing shells, screen shake)
 - `main.js`: drawing, menus, weapon draft and controls
