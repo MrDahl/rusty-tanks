@@ -69,6 +69,35 @@ function makeRng(seed) {
   };
 }
 
+// ---- Hole shapes: is the point (dx, dy) from the blast centre inside the hole? ----
+// r is the blast size. Shapes are roughly the same area as a round hole but look very different.
+function inShape(shape, dx, dy, r, ph) {
+  switch (shape) {
+    case "wide":    return (dx * dx) / (2.89 * r * r) + (dy * dy) / (0.36 * r * r) <= 1;
+    case "tall":    return (dx * dx) / (0.3 * r * r) + (dy * dy) / (3.06 * r * r) <= 1;
+    case "diamond": return Math.abs(dx) + Math.abs(dy) <= 1.25 * r;
+    case "square":  return Math.abs(dx) <= 0.9 * r && Math.abs(dy) <= 0.9 * r;
+    case "star": {
+      let t = (Math.atan2(dy, dx) + Math.PI / 2) / (Math.PI * 2 / 5) + 0.5;
+      t -= Math.floor(t);
+      return Math.hypot(dx, dy) <= r * (0.5 + 0.85 * (1 - Math.abs(2 * t - 1)));
+    }
+    case "cone": {
+      if (dy < -0.4 * r || dy > 1.6 * r) return false;
+      return Math.abs(dx) <= 1.3 * r * (1 - (dy + 0.4 * r) / (2.0 * r));
+    }
+    case "blob": {
+      const a = Math.atan2(dy, dx);
+      const R = r * (1 + 0.28 * Math.sin(3 * a + ph[0]) + 0.18 * Math.sin(5 * a + ph[1]) + 0.1 * Math.sin(9 * a + ph[2]));
+      return Math.hypot(dx, dy) <= R;
+    }
+    case "trench":  return Math.abs(dx) <= 1.9 * r && Math.abs(dy) <= 0.35 * r;
+    case "bowl":    return dy >= -0.2 * r && Math.hypot(dx, dy) <= 1.2 * r;
+    case "ring":    { const d = Math.hypot(dx, dy); return d >= 0.55 * r && d <= 1.15 * r; }
+    default:        return dx * dx + dy * dy <= r * r;
+  }
+}
+
 // ---- Terrain: a grid with one byte per pixel (1 = dirt, 0 = air) -----
 let explosionCounter = 0; // every explosion gets a number, so the effects code can tell new ones
 let versionCounter = 0; // every terrain change gets a new number, so main.js knows when to repaint
@@ -149,6 +178,36 @@ class Terrain {
     }
     this.markUnstable(minX, maxX);
     this.touch(minX, maxX);
+  }
+
+  // Remove dirt in one of the hole shapes above (round when no shape is given)
+  carveShape(cx, cy, r, shape, rand) {
+    if (!shape || shape === "circle") { this.carveCircle(cx, cy, r); return; }
+    const ph = shape === "blob" ? [rand() * 6.28, rand() * 6.28, rand() * 6.28] : null;
+    const ext = Math.ceil(r * 2.0);
+    const minX = Math.max(0, Math.floor(cx - ext)), maxX = Math.min(W - 1, Math.ceil(cx + ext));
+    const minY = Math.max(0, Math.floor(cy - ext)), maxY = Math.min(H - 1, Math.ceil(cy + ext));
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (inShape(shape, x - cx, y - cy, r, ph)) this.mask[y * W + x] = 0;
+      }
+    }
+    this.markUnstable(minX, maxX);
+    this.touch(minX, maxX);
+  }
+
+  // Fill holes and valleys: every column in range is raised up to the highest ground there
+  // (but by at most maxAdd pixels). Used by Landfill.
+  fillLevel(cx, r, maxAdd) {
+    const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(W - 1, Math.ceil(cx + r));
+    let level = H;
+    for (let x = x0; x <= x1; x++) level = Math.min(level, this.surfaceY(x, 0));
+    for (let x = x0; x <= x1; x++) {
+      const top = this.surfaceY(x, 0);
+      for (let y = Math.max(level, top - maxAdd); y < top; y++) this.mask[y * W + x] = 1;
+    }
+    this.markUnstable(x0, x1);
+    this.touch(x0, x1);
   }
 
   // Pile a heap of dirt on top of the ground (used by the Slag Heap)
@@ -310,6 +369,8 @@ class Game {
       score: 0,
       weapon: 0,                 // index into WEAPON_LIST
       sink: 0,                   // monsoon: pixels sunk into the mud
+      buried: false,             // covered in dirt: cannot drive until a blast frees it
+      pushLeft: 0, pushDir: 1,   // being shoved by a Gale Cannon / Gravity Well
       slide: 0,                  // iceage: sliding speed (pixels per second, + = right)
     }));
     // ammo[player][weapon] = shots left (one per time it was drafted)
@@ -323,6 +384,7 @@ class Game {
     this.moveDir = 0;            // -1 left, 0 stopped, 1 right (set by the controls)
     this.turnMoved = 0;          // how far the current tank has driven this turn
     this.drivingNow = false;
+    this.finalRound = false;     // the last storm after the final shot
     this.weatherEvents = [];     // lightning / meteors waiting to happen at the start of a turn
     this.weatherClock = 0;
     this.turnNote = "";          // extra message for this turn ("Hopped!" etc.)
@@ -395,6 +457,7 @@ class Game {
     const t = this.tank;
     const other = this.tanks[1 - this.current];
     let moved = 0;
+    if (t.buried) return 0;                                      // stuck in dirt
     if (t.sink > 0 && !sliding) { t.y -= t.sink; t.sink = 0; }   // monsoon: drive out of the mud
     while (moved < dist - 1e-9 && (sliding || this.moveLeft > 1e-9)) {
       const step = sliding ? Math.min(1, dist - moved) : Math.min(1, dist - moved, this.moveLeft);
@@ -463,7 +526,7 @@ class Game {
 
     const speed = t.power * SPEED_PER_POWER * (w.speed || 1);
     if (w.hop) {
-      this.hopTank(t, speed);
+      this.hopTank(t, speed, w);
     } else {
       // Most weapons fire one shell; volleys fire several (fanned out or one after another)
       const v = w.volley || { count: 1, fan: 0, stagger: 0 };
@@ -482,16 +545,16 @@ class Game {
   }
 
   // Rocket Hop: the tank itself flies along the shot path and lands where the shell would
-  hopTank(t, speed) {
+  hopTank(t, speed, w) {
     const a = (t.angle * Math.PI) / 180;
     const p = { x: t.x, y: t.y - 14, lastX: t.x, lastY: t.y - 14, vx: Math.cos(a) * speed, vy: -Math.sin(a) * speed };
-    this.addExplosion(t.x, t.y - 6, 24, "dirt");
+    this.addExplosion(t.x, t.y - 6, 24, "dirt", { style: w && w.fx, color: w && w.color });
     let result = "flying";
     for (let i = 0; i < 1500 && result === "flying"; i++) {
       result = stepProjectile(p, STEP, this.wind, this.terrain, []);
     }
     if (result === "hit") {
-      this.placeTank(t, p.lastX, p.lastY);
+      this.placeTank(t, p.lastX, p.lastY, { style: w && w.fx, color: w && w.color });
       this.turnNote = "Hopped!";
     } else {
       this.turnNote = "Flew off the map - stayed put";
@@ -499,7 +562,7 @@ class Game {
   }
 
   // Put a tank on the ground at (about) x, keeping clear of the other tank
-  placeTank(t, x, fromY) {
+  placeTank(t, x, fromY, look) {
     const other = this.tanks[this.tanks.indexOf(t) === 0 ? 1 : 0];
     x = Math.max(20, Math.min(W - 20, x));
     if (Math.abs(x - other.x) < MIN_TANK_GAP) {
@@ -509,8 +572,9 @@ class Game {
     t.x = x;
     t.sink = 0;
     t.slide = 0;
+    t.buried = false;
     t.y = this.terrain.surfaceY(x, Math.max(0, fromY - 30));
-    this.addExplosion(t.x, t.y - 6, 24, "dirt");
+    this.addExplosion(t.x, t.y - 6, 24, "dirt", look);
     this.settleTanks();
   }
 
@@ -523,6 +587,7 @@ class Game {
       this.driveTank(this.moveDir, MOVE_SPEED * dt);
     }
     if (this.phase === "aim" && this.weather === "iceage" && !this.drivingNow) this.slideStep(dt);
+    this.pushStep(dt);
 
     if (this.phase === "flight") {
       for (const p of this.projs.slice()) this.updateProjectile(p, dt);
@@ -600,7 +665,7 @@ class Game {
       p.splitDone = true;
       p.dead = true;
       const s = p.w.split;
-      const fragment = this.fragment(s, p.w.color);
+      const fragment = this.fragment(s, p.w);
       for (let i = 0; i < s.count; i++) {
         const k = s.count === 1 ? 0 : i / (s.count - 1) - 0.5; // -0.5 .. 0.5
         this.projs.push(this.makeProj(fragment, p.x, p.y, p.vx + k * 2 * s.spread, p.vy, p.owner, { splitDone: true }));
@@ -631,13 +696,14 @@ class Game {
   }
 
   // Record an explosion animation (main.js draws it and spawns sparks; the id lets it spot new ones)
-  addExplosion(x, y, r, kind) {
-    this.explosions.push({ id: ++explosionCounter, x: x, y: y, r: r, t: 0, kind: kind });
+  // extra = { style, shape, color, x2, y2 }: tells fx.js how this explosion should look
+  addExplosion(x, y, r, kind, extra) {
+    this.explosions.push(Object.assign({ id: ++explosionCounter, x: x, y: y, r: r, t: 0, kind: kind }, extra || {}));
   }
 
   // A small shell made from a weapon's "split / burst / rain" settings
-  fragment(spec, color) {
-    return { name: "fragment", blast: spec.blast, damage: spec.damage, color: color };
+  fragment(spec, parent) {
+    return { name: "fragment", blast: spec.blast, damage: spec.damage, color: parent.color, dirt: spec.dirt, fx: parent.fxFrag || "pop" };
   }
 
   // Reflect a shell off the ground
@@ -687,7 +753,7 @@ class Game {
         return;
       }
       p.airCount = this.terrain.isSolid(p.x, p.y) ? 0 : p.airCount + 1;
-      this.terrain.carveCircle(p.x, p.y, 5);
+      this.terrain.carveCircle(p.x, p.y, p.w.drillWidth || 5);
       p.dug++;
       // Came out the other side, or dug deep enough: boom
       if (p.dug >= p.w.drill || (p.dug > 6 && p.airCount > 3)) {
@@ -723,22 +789,41 @@ class Game {
     const w = p.w;
     const x = p.x, y = p.y, owner = p.owner;
 
+    const dustLook = { style: w.fx || "dust", color: w.color };
     if (w.dirt) {
       this.terrain.addHeap(x, w.dirt);
-      this.addExplosion(x, y, w.dirt, "dirt");
+      this.addExplosion(x, y, w.dirt, "dirt", dustLook);
       this.turnNote = "Dirt piled up!";
+      this.coverTanks();
+      this.settleTanks();
+      return;
+    }
+    if (w.mounds) {
+      const M = w.mounds;
+      for (let k = 0; k < M.count; k++) this.terrain.addHeap(x + (k - (M.count - 1) / 2) * M.spacing, M.size);
+      this.addExplosion(x, y, M.spacing * M.count * 0.45, "dirt", dustLook);
+      this.turnNote = "Mounds built!";
+      this.coverTanks();
+      this.settleTanks();
+      return;
+    }
+    if (w.fill) {
+      this.terrain.fillLevel(x, w.fill.radius, w.fill.max);
+      this.addExplosion(x, y, w.fill.radius, "dirt", dustLook);
+      this.turnNote = "Filled in!";
+      this.coverTanks();
       this.settleTanks();
       return;
     }
     if (w.wall) {
       this.terrain.addWall(x, w.wall.height, w.wall.width, this.tanks.map((t) => t.x));
-      this.addExplosion(x, y, 30, "dirt");
+      this.addExplosion(x, y, 30, "dirt", dustLook);
       this.turnNote = "Wall built!";
       this.settleTanks();
       return;
     }
     if (w.teleport) {
-      this.placeTank(this.tanks[owner], x, y);
+      this.placeTank(this.tanks[owner], x, y, { style: w.fx, color: w.color });
       this.turnNote = "Teleported!";
       return;
     }
@@ -747,6 +832,23 @@ class Game {
     this.explode(x, y, owner, w.blast, w.damage, w);
 
     // ...and then does its extra trick
+    if (w.push) this.pushTanks(x, y, w.push);
+    if (w.arc) {
+      const foe = this.tanks[1 - owner];
+      const d = Math.hypot(x - foe.x, y - (foe.y - 8));
+      if (d <= w.arc.range) {
+        this.hurt(1 - owner, owner, Math.max(5, Math.round(w.arc.damage * (1 - d / w.arc.range))), w);
+        this.addExplosion(foe.x, foe.y - 10, 20, "arc", { style: "electric", x2: x, y2: y, color: w.color });
+      }
+    }
+    if (w.quake) {
+      const Q = w.quake;
+      this.tanks.forEach((t, i) => {
+        const dx = Math.abs(t.x - x);
+        if (dx <= Q.range) this.hurt(i, owner, Math.max(1, Math.round(Q.damage * (1 - dx / Q.range))), w);
+      });
+      this.addExplosion(x, y, Q.range, "quake", { style: "quake", color: w.color });
+    }
     if (w.chaos) {
       const pool = WEAPON_LIST.filter((c) => c.ai && !c.chaos);
       const pick = pool[Math.floor(this.rand() * pool.length)];
@@ -761,7 +863,7 @@ class Game {
     }
     if (w.burst) {
       const b = w.burst;
-      const fragment = this.fragment(b, w.color);
+      const fragment = this.fragment(b, w);
       for (let i = 0; i < b.count; i++) {
         const ang = ((b.count > 1 ? 25 + (i * 130) / (b.count - 1) : 90) * Math.PI) / 180;
         this.projs.push(this.makeProj(fragment, x, y - 6, Math.cos(ang) * b.speed, -Math.sin(ang) * b.speed, owner));
@@ -790,7 +892,7 @@ class Game {
     }
     if (w.rain) {
       const R = w.rain;
-      const fragment = this.fragment(R, w.color);
+      const fragment = this.fragment(R, w);
       for (let i = 0; i < R.count; i++) {
         const off = R.count > 1 ? (i / (R.count - 1) * 2 - 1) * R.spread + (this.rand() - 0.5) * 10 : 0;
         const rx = Math.max(1, Math.min(W - 2, x + off));
@@ -800,39 +902,114 @@ class Game {
   }
 
   explode(x, y, owner, blast, damage, w) {
-    if (blast > 0) this.terrain.carveCircle(x, y, blast);
+    if (blast > 0) this.terrain.carveShape(x, y, blast, w && w.shape, this.rand);
 
     // Score: closer to the middle of the blast = more points
     const reach = blast + TANK_RADIUS * 0.5;
     if (damage > 0) {
       this.tanks.forEach((t, i) => {
         const d = Math.hypot(x - t.x, y - (t.y - 8));
-        if (d <= reach) {
-          const points = Math.max(1, Math.round(damage * (1 - d / reach)));
-          if (i === owner) {
-            this.tanks[owner].score -= points;
-            this.turnSelf += points;
-          } else {
-            this.tanks[owner].score += points;
-            this.turnGain += points;
-            if (w && w.scramble) { // Wobble Shot: mess up the victim's aim
-              t.angle = t.angle <= 90 ? 20 + this.rand() * 60 : 100 + this.rand() * 60;
-              t.power = 30 + this.rand() * 60;
-            }
-          }
-        }
+        if (d <= reach) this.hurt(i, owner, Math.max(1, Math.round(damage * (1 - d / reach))), w);
       });
     }
 
-    if (blast > 0) this.addExplosion(x, y, blast, "fire");
+    if (blast > 0) this.addExplosion(x, y, blast, "fire", { style: (w && w.fx) || "blast", shape: w && w.shape, color: w && w.color });
     this.settleTanks();
+  }
+
+  // Points: the shooter gains when an enemy is hit, and loses them when hitting himself
+  hurt(i, owner, points, w) {
+    if (points <= 0) return;
+    if (i === owner) {
+      this.tanks[owner].score -= points;
+      this.turnSelf += points;
+    } else {
+      this.tanks[owner].score += points;
+      this.turnGain += points;
+      if (w && w.scramble) { // Wobble Shot: mess up the victim's aim
+        const t = this.tanks[i];
+        t.angle = t.angle <= 90 ? 20 + this.rand() * 60 : 100 + this.rand() * 60;
+        t.power = 30 + this.rand() * 60;
+      }
+    }
+  }
+
+  // ---- Buried tanks ----
+  // How much of the space around a tank is dirt (0 = free, 1 = completely filled in)
+  coverage(t) {
+    let solid = 0, n = 0;
+    for (let y = Math.floor(t.y - 26); y < t.y - 3; y++) {
+      for (let x = Math.floor(t.x - 12); x <= t.x + 12; x++) {
+        n++;
+        if (this.terrain.isSolid(x, y)) solid++;
+      }
+    }
+    return n ? solid / n : 0;
+  }
+
+  // After dirt was added: tanks that are covered get stuck (they do not ride up on top any more)
+  coverTanks() {
+    const names = [];
+    this.tanks.forEach((t, i) => {
+      if (!t.buried && this.coverage(t) > 0.5) {
+        t.buried = true;
+        t.slide = 0;
+        t.sink = 0;
+        names.push(this.playerName(i));
+      }
+    });
+    if (names.length) this.turnNote = "Buried " + names.join(" and ") + "!";
+  }
+
+  // ---- Shoving tanks (Gale Cannon pushes, Gravity Well pulls) ----
+  pushTanks(x, y, spec) {
+    for (const t of this.tanks) {
+      if (t.buried) continue;
+      const d = Math.hypot(x - t.x, y - (t.y - 8));
+      if (d > spec.range) continue;
+      const amount = Math.abs(spec.force) * (1 - d / spec.range);
+      let dir = Math.sign(t.x - x) || 1;
+      if (spec.force < 0) dir = -dir;
+      t.pushDir = dir;
+      t.pushLeft = spec.force < 0 ? Math.min(amount, Math.abs(t.x - x)) : amount; // a pull never overshoots
+    }
+  }
+
+  // Slide any tank sideways along the ground. Returns how far it got.
+  moveTankBy(t, dir, dist) {
+    const other = this.tanks[this.tanks.indexOf(t) === 0 ? 1 : 0];
+    let moved = 0;
+    while (moved < dist - 1e-9) {
+      const step = Math.min(1, dist - moved);
+      const nx = t.x + dir * step;
+      if (nx < 15 || nx > W - 15) break;
+      if (Math.abs(nx - other.x) < MIN_TANK_GAP) break;
+      const top = this.terrain.surfaceY(nx, t.y - 14);
+      if (t.y - top > CLIMB_LIMIT * step + 0.5) break;
+      t.x = nx;
+      t.y = top;
+      t.sink = 0;
+      moved += step;
+    }
+    return moved;
+  }
+
+  // Tanks that were hit by a push or pull glide along (called every step)
+  pushStep(dt) {
+    for (const t of this.tanks) {
+      if (t.pushLeft <= 0) continue;
+      const want = Math.min(t.pushLeft, 240 * dt);
+      const moved = this.moveTankBy(t, t.pushDir, want);
+      t.pushLeft = moved < want - 1e-6 ? 0 : t.pushLeft - moved;
+    }
   }
 
   // Tanks drop down if the ground vanishes, and ride up if dirt piles under them
   settleTanks() {
     for (const t of this.tanks) {
       t.y -= t.sink;                                  // find the surface, then sink back into the mud
-      while (t.y > 0 && this.terrain.isSolid(t.x, t.y - 6)) t.y--;
+      if (t.buried && this.coverage(t) < 0.25) t.buried = false;   // a blast dug it free
+      if (!t.buried) while (t.y > 0 && this.terrain.isSolid(t.x, t.y - 6)) t.y--;
       while (t.y < H && !this.terrain.isSolid(t.x, t.y + 1)) t.y++;
       t.y += t.sink;
     }
@@ -842,11 +1019,15 @@ class Game {
     this.explosions = [];
     this.projs = [];
     if (this.shotsFired[0] >= this.shotLimit && this.shotsFired[1] >= this.shotLimit) {
-      this.phase = "over";
+      // Thunderstorm and Apocalypse: one last round of lightning / meteors, then the result
+      // (so the player who shoots last still has a fair chance of being helped by the weather)
+      this.finalRound = true;
+      this.beginWeather();
+      if (this.phase !== "weather") this.phase = "over";
       return;
     }
     // Monsoon: a tank that sat still this turn sinks deeper into the mud
-    if (this.weather === "monsoon" && this.turnMoved < 1) {
+    if (this.weather === "monsoon" && this.turnMoved < 1 && !this.tank.buried) {
       const t = this.tank;
       const d = Math.min(SINK_PER_TURN, SINK_MAX - t.sink);
       if (d > 0) { t.sink += d; t.y += d; }
@@ -882,13 +1063,13 @@ class Game {
       for (let i = 0; i < n; i++) {
         this.weatherEvents.push({ kind: "strike", at: 0.5 + i * 0.9 + this.rand() * 0.3, x: this.pickStrikeX(BOLT_AIM_BIAS), done: false });
       }
-      this.lastHit = "Thunderstorm!";
+      this.lastHit = this.finalRound ? "Final thunderstorm!" : "Thunderstorm!";
     } else if (this.weather === "apocalypse") {
       const n = 3 + (this.rand() < 0.5 ? 1 : 0);
       for (let i = 0; i < n; i++) {
         this.weatherEvents.push({ kind: "meteor", at: METEOR_FALL_TIME + 0.15 + i * 0.5 + this.rand() * 0.2, x: this.pickStrikeX(METEOR_AIM_BIAS), done: false });
       }
-      this.lastHit = "Meteor shower!";
+      this.lastHit = this.finalRound ? "Final meteor shower!" : "Meteor shower!";
     }
     this.settleTime = 0;
     this.phase = this.weatherEvents.length ? "weather" : "aim";
@@ -907,7 +1088,7 @@ class Game {
       this.settleTime += dt;
       if (this.terrain.unstable.size === 0 || this.settleTime >= SETTLE_MAX) {
         this.weatherEvents = [];
-        this.phase = "aim";
+        this.phase = this.finalRound ? "over" : "aim";
       }
     }
   }
@@ -955,6 +1136,12 @@ class Game {
     const t = this.tank;
 
     // Step 1: pick a weapon and decide whether to drive somewhere first
+    if (!this.aiPlan && t.buried) {
+      // Buried in dirt: shoot straight up, and let the blast dig a way out
+      const weapon = this.aiBuriedWeapon();
+      t.weapon = weapon;
+      this.aiPlan = { weapon: weapon, dir: 0, targetX: 0, shot: { angle: 90, power: 25, perfect: null }, timer: AI_THINK_TIME * 0.6 };
+    }
     if (!this.aiPlan) {
       const weapon = this.aiChooseWeapon();
       t.weapon = weapon;
@@ -988,6 +1175,17 @@ class Game {
       this.aiPlan = null;
       this.fire(true);
     }
+  }
+
+  // The weapon that digs the biggest hole for the least self-damage
+  aiBuriedWeapon() {
+    let best = -1, bestScore = -Infinity;
+    WEAPON_LIST.forEach((w, i) => {
+      if (!this.hasAmmo(this.current, i) || !(w.blast > 0) || w.teleport || w.hop) return;
+      const s = w.blast - w.damage * 0.4;
+      if (s > bestScore) { bestScore = s; best = i; }
+    });
+    return best >= 0 ? best : this.firstWeapon(this.current);
   }
 
   // Which weapon the computer uses this turn: a random pick from the ones it owns and can aim.
@@ -1076,6 +1274,7 @@ class Game {
       (w.scatter ? w.scatter.radius : 0) +
       (w.line ? w.line.count * w.line.spacing : 0) +
       (w.rain ? w.rain.spread : 0) +
+      (w.shape ? w.blast * 0.9 : 0) +
       (w.burst ? 40 : 0);
   }
 
@@ -1153,25 +1352,19 @@ class Game {
   }
 }
 
-// The computer picks weapons for its loadout: only ones it can aim, with a taste for variety.
-// myPicks = list of weapon numbers it already has. Returns the next weapon number.
-function aiDraftPick(myPicks, rand) {
-  const options = [];
-  WEAPON_LIST.forEach((w, i) => {
-    if (!w.ai) return;
-    const have = myPicks.filter((p) => p === i).length;
-    options.push({ i: i, weight: 1 / Math.pow(1 + have * 2, 2) }); // each copy makes it less likely
-  });
-  const total = options.reduce((sum, o) => sum + o.weight, 0);
-  let r = rand() * total;
-  for (const o of options) {
-    r -= o.weight;
-    if (r <= 0) return o.i;
+// The computer picks a weapon for its loadout from the ones still in the pool.
+// available = list of weapon numbers nobody has taken yet. Weapons it can aim are much more likely.
+function aiDraftPick(available, rand) {
+  const weights = available.map((i) => (WEAPON_LIST[i].ai ? 5 : 1));
+  let r = rand() * weights.reduce((sum, x) => sum + x, 0);
+  for (let k = 0; k < available.length; k++) {
+    r -= weights[k];
+    if (r <= 0) return available[k];
   }
-  return options[options.length - 1].i;
+  return available[available.length - 1];
 }
 
 // Lets the test script load this file in Node (ignored in the browser)
 if (typeof module !== "undefined") {
-  module.exports = { Game, Terrain, aiDraftPick, SEASONS, WEAPONS: WEAPON_LIST, AI_ERROR, stepProjectile, makeRng, W, H, STEP, TANK_RADIUS, SHOTS_PER_PLAYER };
+  module.exports = { Game, Terrain, aiDraftPick, SEASONS, inShape, WEAPONS: WEAPON_LIST, AI_ERROR, stepProjectile, makeRng, W, H, STEP, TANK_RADIUS, SHOTS_PER_PLAYER };
 }

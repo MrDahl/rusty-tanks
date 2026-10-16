@@ -291,7 +291,8 @@ function drawHud() {
     const line = wp.name.toUpperCase() + " - " + wp.info;
     neonText(line, W / 2, 96, COLORS.text, fitSize(line, 9, W - 330), "center");
     if (!game.isAiTurn) neonText("DRIVE LEFT " + Math.round(game.moveLeft) + "  (A / D)", W / 2, 114, COLORS.textDim, 8, "center");
-    if (game.tank.sink > 0) neonText("STUCK IN THE MUD - DRIVE TO GET FREE", W / 2, 130, SEASON_COLORS.monsoon, 8, "center");
+    if (game.tank.buried) neonText("BURIED IN DIRT - BLAST YOURSELF FREE", W / 2, 130, "#ffb060", 8, "center");
+    else if (game.tank.sink > 0) neonText("STUCK IN THE MUD - DRIVE TO GET FREE", W / 2, 130, SEASON_COLORS.monsoon, 8, "center");
   } else if (game.lastHit && game.phase !== "over") {
     neonText(game.lastHit.toUpperCase(), W / 2, 76, NEON.amber, 13, "center");
   }
@@ -325,6 +326,13 @@ function draw() {
     if (t.sink > 0) { // stuck in the mud: put the ground back in front of the sunken part
       const sx = Math.round(t.x) - 34, sy = Math.round(t.y) - 22 - t.sink;
       ctx.drawImage(terrainCanvas, sx, sy, 68, 62, sx, sy, 68, 62);
+    }
+    if (t.buried) { // covered in dirt: the ground hides the tank, which shows through as a faint ghost
+      const sx = Math.round(t.x) - 40, sy = Math.round(t.y) - 62;
+      ctx.drawImage(terrainCanvas, sx, sy, 80, 74, sx, sy, 80, 74);
+      ctx.globalAlpha = 0.35;
+      drawTank(t, i, false);
+      ctx.globalAlpha = 1;
     }
   });
   drawAimGuide();
@@ -383,16 +391,18 @@ function rematch() {
   game.newMatch(Date.now(), aiSetting(), currentLoadouts ? [currentLoadouts[0].slice(), currentLoadouts[1].slice()] : undefined, settings.season);
 }
 
-// ---- Weapon draft --------------------------------------------------------
-// Players take turns picking weapons (P1, P2, P1, ...). Both may pick the same weapon, and
-// the same player may pick one more than once. Each pick is one use in the battle.
+// ---- Weapon draft ---------------------------------------------------------
+// Every game starts with a fresh random pool of 20 weapons. Players take turns picking (P1, P2,
+// P1, ...) until each has 10. A weapon that was picked is gone for both players. Each pick is
+// one use in the battle.
 const PICKS_EACH = 10;
+const POOL_SIZE = PICKS_EACH * 2;
 const draftSection = document.getElementById("draft");
 const stageEl = document.getElementById("stage");
 const controlsEl = document.getElementById("controls");
 const helpEl = document.getElementById("help");
 const draftGo = document.getElementById("draftGo");
-const draft = { picks: [[], []], token: 0 };
+const draft = { picks: [[], []], pool: [], token: 0 };
 let draftOpen = false;
 
 function drafter() {
@@ -406,20 +416,44 @@ function draftDone() {
 function playerLabel(p) {
   return aiSetting()[p] ? "Computer (" + aiSetting()[p] + ")" : "Player " + (p + 1);
 }
+// Who took weapon i? 0 or 1, or -1 if it is still in the pool
+function takenBy(i) {
+  return draft.picks[0].includes(i) ? 0 : draft.picks[1].includes(i) ? 1 : -1;
+}
+function availableWeapons() {
+  return draft.pool.filter((i) => takenBy(i) < 0);
+}
+
+// A random set of 20 weapons (the computer needs enough weapons it knows how to aim)
+function makePool() {
+  let pool = [];
+  for (let tries = 0; tries < 60; tries++) {
+    const all = WEAPONS.map((w, i) => i);
+    for (let i = all.length - 1; i > 0; i--) { // shuffle
+      const j = Math.floor(Math.random() * (i + 1));
+      [all[i], all[j]] = [all[j], all[i]];
+    }
+    pool = all.slice(0, POOL_SIZE);
+    if (pool.filter((i) => WEAPONS[i].ai).length >= 9) break;
+  }
+  return pool.sort((x, y) => x - y);
+}
 
 function buildWeaponGrid() {
   const grid = document.getElementById("weaponGrid");
   grid.innerHTML = "";
-  WEAPONS.forEach((w, i) => {
+  for (const i of draft.pool) {
+    const w = WEAPONS[i];
     const b = document.createElement("button");
     b.className = "wcard";
+    b.dataset.weapon = i;
     b.style.borderLeftColor = lighten(w.color, 0.55);
-    b.innerHTML = "<b></b><span></span>";
-    b.firstChild.textContent = w.name;
-    b.lastChild.textContent = w.info;
+    b.innerHTML = "<b></b><span></span><em></em>";
+    b.children[0].textContent = w.name;
+    b.children[1].textContent = w.info;
     b.addEventListener("click", () => draftPick(i));
     grid.appendChild(b);
-  });
+  }
 }
 
 function renderDraft() {
@@ -441,13 +475,21 @@ function renderDraft() {
   if (draftDone()) turn.textContent = "All set! Press START BATTLE.";
   else if (humanTurn) turn.textContent = playerLabel(who) + ": pick weapon " + (draft.picks[who].length + 1) + " of " + PICKS_EACH;
   else turn.textContent = playerLabel(who) + " is choosing...";
-  for (const b of document.querySelectorAll("#weaponGrid button")) b.disabled = !humanTurn;
+  document.getElementById("weaponGrid").classList.toggle("wait", !humanTurn);
+  for (const b of document.querySelectorAll("#weaponGrid button")) {
+    const owner = takenBy(Number(b.dataset.weapon));
+    b.disabled = owner >= 0;
+    b.classList.toggle("taken", owner >= 0);
+    b.classList.toggle("t0", owner === 0);
+    b.classList.toggle("t1", owner === 1);
+    b.lastChild.textContent = owner >= 0 ? "TAKEN BY " + shortName(owner) : "";
+  }
   document.getElementById("draftRandom").disabled = !humanTurn;
   draftGo.disabled = !draftDone();
 }
 
 function draftPick(i) {
-  if (draftDone() || aiSetting()[drafter()]) return;
+  if (draftDone() || aiSetting()[drafter()] || takenBy(i) >= 0 || !draft.pool.includes(i)) return;
   draft.picks[drafter()].push(i);
   renderDraft();
   draftAiTurn();
@@ -460,7 +502,7 @@ function draftAiTurn() {
   const p = drafter();
   setTimeout(() => {
     if (!draftOpen || token !== draft.token || drafter() !== p) return;
-    draft.picks[p].push(aiDraftPick(draft.picks[p], Math.random));
+    draft.picks[p].push(aiDraftPick(availableWeapons(), Math.random));
     renderDraft();
     draftAiTurn();
   }, 450);
@@ -468,6 +510,7 @@ function draftAiTurn() {
 
 function openDraft() {
   draft.picks = [[], []];
+  draft.pool = makePool();
   draft.token++;
   draftOpen = true;
   stageEl.style.display = "none";
@@ -493,13 +536,12 @@ document.getElementById("draftBack").addEventListener("click", () => {
   showMenu();
 });
 
-// "Random picks for me": fill in all remaining picks of the player whose turn it is
+// "Random pick": the player whose turn it is gets a random weapon from the pool
 document.getElementById("draftRandom").addEventListener("click", () => {
   const p = drafter();
-  if (aiSetting()[p]) return;
-  while (draft.picks[p].length < PICKS_EACH) draft.picks[p].push(Math.floor(Math.random() * WEAPONS.length));
-  renderDraft();
-  draftAiTurn();
+  if (aiSetting()[p] || draftDone()) return;
+  const left = availableWeapons();
+  draftPick(left[Math.floor(Math.random() * left.length)]);
 });
 
 draftGo.addEventListener("click", () => {

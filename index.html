@@ -150,6 +150,15 @@
       mix-blend-mode: multiply;
     }
     #fxlabel { white-space: nowrap; }
+    /* Weapon draft: the pool of 20 */
+    #draftNote { text-align: center; margin: 0 0 6px; color: #9fc4ea; font-family: "Courier New", monospace; font-size: 13px; }
+    button.wcard { position: relative; }
+    button.wcard em { display: block; font-style: normal; font-size: 8px; margin-top: 4px; min-height: 0; letter-spacing: 1px; }
+    button.wcard.taken { opacity: 0.4; }
+    button.wcard.t0 { border-color: #35f2ff; } button.wcard.t0 em { color: #35f2ff; }
+    button.wcard.t1 { border-color: #ff3df0; } button.wcard.t1 em { color: #ff3df0; }
+    #weaponGrid.wait button.wcard:not(.taken) { cursor: default; }
+    #weaponGrid.wait button.wcard:hover:not(:disabled) { background: #12204a; }
     /* The season row is crowded: smaller buttons, and the line under it explains the choice */
     #seasonRow { gap: 6px; max-width: 880px; }
     #seasonRow button.choice { min-width: 0; padding: clamp(4px, 1vw, 7px) clamp(7px, 1.3vw, 11px); font-size: clamp(7px, 1.35vw, 10px); }
@@ -201,6 +210,7 @@
 
   <div id="draft" class="hidden">
     <h2>Choose your weapons</h2>
+    <p id="draftNote">A new pool of 20 weapons every game. Once a weapon is picked, it is gone for both players.</p>
     <p id="draftTurn"></p>
     <div id="picks">
       <div class="pickbox" id="pickbox0"><h3 id="pickname0"></h3><ol id="picklist0"></ol></div>
@@ -209,7 +219,7 @@
     <div id="weaponGrid"></div>
     <div class="row">
       <button id="draftBack" class="secondary">Back</button>
-      <button id="draftRandom" class="secondary">Random picks for me</button>
+      <button id="draftRandom" class="secondary">Random pick</button>
       <button id="draftGo" disabled>START BATTLE</button>
     </div>
   </div>
