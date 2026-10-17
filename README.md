@@ -26,11 +26,14 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 - Dirt weapons (Mud Pie, Avalanche, Spire, Triple Mound, Landfill) can bury a tank. A buried tank cannot drive; it must dig itself out with its own weapons.
 - The night sky sometimes has a moon and semi-transparent drifting clouds that the moon shines through.
 
-Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = drive, 1-9 = choose weapon, Space = fire, N = rematch (same weapons), Esc = menu.
+- Sound: every sound is synthesized live in the browser (no sound files). Every weapon has its own launch sound, and each of the 16 explosion styles has its own boom. The music is a chiptune in the style of old keygen tracks (fast arpeggios, bouncy bass, pulse lead, noise drums): a calmer track for the menus and a faster one for the battle. Click anywhere once to switch sound on; the Sound and Music boxes (or the M key) turn them off again.
+
+Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = drive, 1-9 = choose weapon, Space = fire, N = rematch (same weapons), M = music on/off, Esc = menu.
 
 ## Files
 - `index.html`: page layout and styling
 - `weapons.js`: the list of weapons (copy a line to invent a new one)
 - `game.js`: the rules (terrain, physics, wind, scoring, turns, computer opponent)
 - `fx.js`: the neon arcade effects (night city, rain, lightning, sparks, glowing shells, screen shake)
+- `sound.js`: synthesized sound effects and chiptune music (Web Audio)
 - `main.js`: drawing, menus, weapon draft and controls

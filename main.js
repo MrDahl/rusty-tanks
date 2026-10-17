@@ -619,6 +619,14 @@ try { if (localStorage.getItem("rustyTanksFx") === "0") fxBox.checked = false; }
 fxBox.addEventListener("change", applyFx);
 applyFx();
 
+// Sound and music switches (remembered between visits)
+const sfxBox = document.getElementById("sfx");
+const musicBox = document.getElementById("music");
+sfxBox.checked = Sound.sfx;
+musicBox.checked = Sound.music;
+sfxBox.addEventListener("change", () => Sound.setSfx(sfxBox.checked));
+musicBox.addEventListener("change", () => Sound.setMusic(musicBox.checked));
+
 // Driving: hold a button (or the A / D key) to drive
 function holdToDrive(button, dir) {
   const start = (e) => { e.preventDefault(); game.setMoveDir(dir); };
@@ -682,6 +690,7 @@ function frame(now) {
     if (!menuOpen) game.update(STEP);
     leftover -= STEP;
   }
+  Sound.observe(game, menuOpen || draftOpen);
   syncControls();
   draw();
   requestAnimationFrame(frame);
