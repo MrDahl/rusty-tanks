@@ -505,14 +505,14 @@ class Game {
   setAngle(deg, force) {
     if (this.isAiTurn && !force) return;
     if (this.tank.lock.angle) return;                                  // frozen turret
-    if (this.tank.lock.scramble) deg += (Math.random() * 2 - 1) * 6;   // radiation sickness: the controls jitter
+    if (this.tank.lock.scramble) deg += (this.rand() * 2 - 1) * 6;   // radiation sickness: the controls jitter
     if (this.phase === "aim") this.tank.angle = Math.max(0, Math.min(180, deg));
   }
 
   setPower(p, force) {
     if (this.isAiTurn && !force) return;
     if (this.tank.lock.power) return;                                  // EMP: power dead
-    if (this.tank.lock.scramble) p += (Math.random() * 2 - 1) * 6;
+    if (this.tank.lock.scramble) p += (this.rand() * 2 - 1) * 6;
     if (this.phase === "aim") this.tank.power = Math.max(5, Math.min(100, p));
   }
 
@@ -598,8 +598,8 @@ class Game {
     this.ammo[this.current][t.weapon]--;
     this.shotsFired[this.current]++;
     if (t.lock.scramble) {      // radiation sickness: the shot wobbles
-      t.angle = Math.max(0, Math.min(180, t.angle + (Math.random() * 2 - 1) * CONFUSE_JITTER));
-      t.power = Math.max(5, Math.min(100, t.power + (Math.random() * 2 - 1) * CONFUSE_JITTER * 1.2));
+      t.angle = Math.max(0, Math.min(180, t.angle + (this.rand() * 2 - 1) * CONFUSE_JITTER));
+      t.power = Math.max(5, Math.min(100, t.power + (this.rand() * 2 - 1) * CONFUSE_JITTER * 1.2));
     }
     this.removedAtFire = this.terrain.removed;
     const st = this.stats[this.current];
@@ -1138,7 +1138,7 @@ class Game {
           f.x = Math.max(2, Math.min(W - 2, f.x + dir * FLAME_STEP_SPEED * dt));
           f.y = this.terrain.surfaceY(f.x, Math.max(0, here - 20));
         }
-        if (f.life > 0 && Math.random() < dt * 4) this.terrain.melt(f.x, f.y, 6);
+        if (f.life > 0 && this.rand() < dt * 4) this.terrain.melt(f.x, f.y, 6);
       }
     }
     this.flames = this.flames.filter((f) => f.life > 0);
@@ -1178,11 +1178,24 @@ class Game {
     }
     if (s.confused > 0) {
       s.confused--;
-      t.angle = t.angle <= 90 ? 15 + Math.random() * 70 : 105 + Math.random() * 60;
-      t.power = 25 + Math.random() * 70;
+      t.angle = t.angle <= 90 ? 15 + this.rand() * 70 : 105 + this.rand() * 60;
+      t.power = 25 + this.rand() * 70;
       notes.push("CONTROLS SCRAMBLED");
     }
     this.statusNote = notes.join("   ");
+  }
+
+  // The match is ending: radiation that is still waiting is paid out in full now,
+  // so a Nuclear Warhead fired late is worth the same as one fired early.
+  settleRadiation() {
+    for (let i = 0; i < 2; i++) {
+      const s = this.tanks[i].status;
+      if (s.rad <= 0) continue;
+      const total = s.rad * s.radDmg;
+      this.applyDamage(i, s.radOwner, total, s.radWeapon);
+      if (i !== s.radOwner) this.stats[s.radOwner].dot += total;
+      s.rad = 0;
+    }
   }
 
   // ---- Buried tanks ----
@@ -1309,6 +1322,7 @@ class Game {
     if (this.shotsFired[0] >= this.shotLimit && this.shotsFired[1] >= this.shotLimit) {
       // Thunderstorm and Apocalypse: one last round of lightning / meteors, then the result
       // (so the player who shoots last still has a fair chance of being helped by the weather)
+      this.settleRadiation();
       this.finalRound = true;
       this.beginWeather();
       if (this.phase !== "weather") this.phase = "over";

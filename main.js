@@ -646,8 +646,13 @@ function syncControls() {
   angleLabel.textContent = Math.round(t.angle) + "°";
   powerLabel.textContent = Math.round(t.power);
   const canAim = game.phase === "aim" && !game.isAiTurn && !menuOpen;
-  angleSlider.disabled = !canAim;
-  powerSlider.disabled = !canAim;
+  const lk = t.lock || {};
+  angleSlider.disabled = !canAim || !!lk.angle;
+  powerSlider.disabled = !canAim || !!lk.power;
+  angleSlider.title = lk.angle ? "Turret frozen - angle is locked this turn" : "";
+  powerSlider.title = lk.power ? "EMP - power is locked this turn" : "";
+  angleSlider.classList.toggle("locked", !!lk.angle);
+  powerSlider.classList.toggle("locked", !!lk.power);
   fireButton.disabled = !canAim;
   syncWeaponList();
 }
@@ -811,7 +816,7 @@ function renderStats() {
   const best = (i) => (S[i].best.gain > 0 ? "+" + S[i].best.gain : "-");
   add("Best shot", best(0), best(1), lead(S[0].best.gain, S[1].best.gain, true), false, [S[0].best.weapon, S[1].best.weapon]);
   const crater = (i) => (S[i].crater.px > 0 ? S[i].crater.px.toLocaleString("en-US") + " px" : "-");
-  add("Biggest crater", crater(0), crater(1), lead(S[0].crater.px, S[1].crater.px, true), false, [S[0].crater.weapon, S[1].crater.weapon]);
+  add("Most terrain destroyed", crater(0), crater(1), lead(S[0].crater.px, S[1].crater.px, true), false, [S[0].crater.weapon, S[1].crater.weapon]);
   const star = [weaponStars(S[0]), weaponStars(S[1])];
   add("Top weapon", star[0] ? star[0].name : "-", star[1] ? star[1].name : "-", [false, false], false,
       [star[0] ? "+" + star[0].points + " points" : "", star[1] ? "+" + star[1].points + " points" : ""]);

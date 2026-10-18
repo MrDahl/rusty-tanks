@@ -20,7 +20,6 @@ const idx = (n) => WL.findIndex((w) => w.name === n);
   let steps = 0;
   while (g.terrain.settleStep(4) && steps < 2000) steps++;
   check(looseCount(g) === 0, "nothing loose after settling (" + steps + " steps)");
-  check(solid(g) === before - 120 * 40 || solid(g) === before - 120 * 40 || true, "");
   check(solid(g) === before - 120 * 40, "dirt conserved: " + (before - solid(g)) + " removed");
   check(steps > 5 && steps < 200, "falls over several steps, not instantly");
 }

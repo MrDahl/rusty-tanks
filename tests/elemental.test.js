@@ -93,5 +93,14 @@ function shotAt(g, name, x, y) { const w = WEAPONS[idx(name)]; g.usedWeapon = w;
   console.log("   dropped", foe.y - y0, "px; shooter score", g.tanks[0].score);
   ck(foe.y - y0 > 15 && g.tanks[0].score > 0, "falling into a hole hurts the victim (credited to the shooter)");
 }
+{ // radiation still waiting when the match ends is paid out in full
+  const g = new Game(9, [null, null], L("Nuclear Warhead"), "normal");
+  const foe = g.tanks[1];
+  shotAt(g, "Nuclear Warhead", foe.x - 20, foe.y - 10);
+  const before = g.tanks[0].score, left = foe.status.rad, dmg = foe.status.radDmg;
+  ck(left > 0, "foe is irradiated");
+  g.settleRadiation();
+  ck(foe.status.rad === 0 && g.tanks[0].score >= before, "pending radiation settled at match end (" + left + " ticks x " + dmg + ")");
+}
 console.log(fails ? fails + " FAILURES" : "ALL ELEMENTAL CHECKS PASSED");
 process.exit(fails ? 1 : 0);
