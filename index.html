@@ -220,6 +220,22 @@
     button.wcard span { font-size: 11px; line-height: 1.2; }
     #draft > .row { margin-top: auto; }
     #draft > .row button { padding: 7px 16px; }
+
+    /* Post-game statistics */
+    #stats { position: absolute; inset: 0; z-index: 7; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(4, 6, 20, 0.9); padding: 14px 40px; box-sizing: border-box; }
+    #stats.hidden { display: none; }
+    #stats h2 { margin: 0 0 4px; font-size: 22px; color: #35f2ff; letter-spacing: 3px; text-shadow: 0 0 8px #35f2ff, 0 0 22px #35f2ff66; text-transform: uppercase; }
+    #statsWinner { margin: 0 0 10px; font-size: 14px; color: #ffe066; letter-spacing: 2px; text-shadow: 0 0 10px #ffe06688; }
+    #statsTable { border-collapse: collapse; width: 100%; max-width: 820px; font-family: "Courier New", monospace; font-size: 15px; }
+    #statsTable th { font-family: inherit; font-size: 14px; padding: 4px 10px; border-bottom: 2px solid #27457a; }
+    #statsTable th.p0, #statsTable td.p0 { color: #35f2ff; }
+    #statsTable th.p1, #statsTable td.p1 { color: #ff3df0; }
+    #statsTable td { padding: 4px 10px; border-bottom: 1px solid #14214a; text-align: center; }
+    #statsTable td.lab { text-align: left; color: #9fc4ea; }
+    #statsTable td.win { font-weight: bold; text-shadow: 0 0 8px currentColor; }
+    #statsTable tr.big td { font-size: 20px; padding: 6px 10px; }
+    #statsTable td small { display: block; color: #7f9cc4; font-size: 11px; }
+    #stats .row { margin-top: 14px; }
   </style>
 </head>
 <body>
@@ -281,6 +297,17 @@
         <div class="row"><button id="start" class="start">DRAFT BATTLE</button><button id="quick" class="start quick">QUICK PLAY</button></div>
         <p class="tag" id="startInfo">Draft: take turns picking 10 weapons from a pool of 20. Quick Play: random weapons, shoot right away.</p>
         <p class="keys">Keys: &larr; &rarr; angle &nbsp; &uarr; &darr; power (Shift = big steps) &nbsp; A / D drive &nbsp; 1-9 / 0 weapon &nbsp; Space fire<br>N rematch &nbsp; M music &nbsp; F fullscreen &nbsp; Esc menu &nbsp; (click once to switch the sound on)</p>
+      </div>
+    </div>
+
+    <div id="stats" class="hidden">
+      <h2>Battle report</h2>
+      <p id="statsWinner"></p>
+      <table id="statsTable"></table>
+      <div class="row">
+        <button id="statsRematch">Rematch</button>
+        <button id="statsMenu" class="secondary">Menu</button>
+        <button id="statsClose" class="secondary">View battlefield</button>
       </div>
     </div>
 

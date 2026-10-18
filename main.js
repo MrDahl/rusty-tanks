@@ -111,10 +111,12 @@ function blockNoise(x, y) {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
+const ICE_RIM = [225, 250, 255], ICE_LIGHT = [150, 215, 245], ICE_BODY = [95, 170, 225], ICE_SPARKLE = [235, 252, 255];
+
 function paintTerrain() {
   const t = game.terrain;
   const x0 = Math.max(0, t.dirtyX0), x1 = Math.min(W - 1, t.dirtyX1);
-  const mask = t.mask, data = terrainImg.data;
+  const mask = t.mask, ice = t.ice, data = terrainImg.data;
   const air = (x, y) => x >= 0 && x < W && y >= 0 && mask[y * W + x] !== 1;
   for (let x = x0; x <= x1; x++) {
     let depth = 0; // how far below the nearest air above this pixel is
@@ -131,6 +133,10 @@ function paintTerrain() {
         const b = Math.max(0, Math.min(3, band + (n < 0.07 ? 1 : n > 0.95 ? -1 : 0)));
         c = crackMask[p] && depth > 8 ? CRACK : ROCK[b];
       }
+      if (ice[p]) {   // frozen dirt: pale, glassy blue
+        const n = blockNoise(x >> 1, (y >> 1) + 77);
+        c = depth < 2 || edge ? ICE_RIM : n < 0.12 ? ICE_SPARKLE : depth < 8 ? ICE_LIGHT : ICE_BODY;
+      }
       data[i] = c[0]; data[i + 1] = c[1]; data[i + 2] = c[2]; data[i + 3] = 255;
       depth++;
     }
@@ -141,6 +147,56 @@ function paintTerrain() {
 }
 
 // ---- Tanks: glowing neon pixel tanks --------------------------------------
+// Visible effects on a tank: ice on a frozen turret, flames, a radiation glow, EMP sparks
+function drawTankStatus(t, index, x, y) {
+  const frozen = t.status.frozen > 0 || (game.current === index && t.lock.angle);
+  const emp = t.status.emp > 0 || (game.current === index && t.lock.drive);
+  const rad = t.status.rad > 0;
+  const time = FX.time;
+  ctx.save();
+  ctx.shadowBlur = 0;
+  if (frozen) {
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = "#bfeeff";
+    ctx.fillRect(x - 12, y - 28, 24, 18);                       // block of ice around the turret
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x - 12.5, y - 28.5, 25, 19);
+    ctx.fillStyle = "#e8fbff";
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x - 10 + i * 6, y - 28); ctx.lineTo(x - 8 + i * 6, y - 36 - (i % 2) * 4); ctx.lineTo(x - 5 + i * 6, y - 28); ctx.fill(); }
+  }
+  if (rad) {
+    const p = 0.5 + 0.5 * Math.sin(time * 6);
+    ctx.globalCompositeOperation = "lighter";
+    const g = ctx.createRadialGradient(x, y - 10, 4, x, y - 10, 34);
+    g.addColorStop(0, "rgba(140,255,90," + (0.28 + 0.15 * p) + ")");
+    g.addColorStop(1, "rgba(80,255,60,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y - 10, 34, 0, Math.PI * 2); ctx.fill();
+  }
+  if (emp) {
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = "rgba(150,200,255," + (0.5 + 0.4 * Math.sin(time * 40)) + ")";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 2; i++) {
+      const sx = x - 14 + ((Math.floor(time * 12) * 7 + i * 13) % 28), sy = y - 26 + ((Math.floor(time * 12) * 5 + i * 9) % 20);
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + 5, sy + 4); ctx.lineTo(sx - 1, sy + 7); ctx.lineTo(sx + 4, sy + 12); ctx.stroke();
+    }
+  }
+  if (t.burning > 0) {
+    ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < 4; i++) {
+      const fx = x - 12 + i * 8, h = 10 + 6 * Math.sin(time * 25 + i * 2);
+      const g = ctx.createRadialGradient(fx, y - 12, 1, fx, y - 12 - h * 0.5, h);
+      g.addColorStop(0, "rgba(255,240,150,0.9)"); g.addColorStop(0.5, "rgba(255,120,30,0.6)"); g.addColorStop(1, "rgba(255,40,0,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(fx, y - 12 - h * 0.4, h, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 function drawTank(t, index, active) {
   const color = COLORS.tanks[index];
   const x = Math.round(t.x), y = Math.round(t.y);
@@ -178,6 +234,8 @@ function drawTank(t, index, active) {
   ctx.fillStyle = "#08102a";
   ctx.fillRect(-3, -15, 6, 2);
   ctx.restore();
+
+  drawTankStatus(t, index, x, y);
 
   // bobbing arrow above the tank whose turn it is
   if (active && game.phase === "aim") {
@@ -264,6 +322,13 @@ function drawHud() {
     neonText(shortName(i), x, 12, COLORS.tanks[i], 11, al);
     neonText(String(game.tanks[i].score), x, 30, COLORS.tanks[i], 22, al);
     neonText("SHOTS " + (game.shotLimit - game.shotsFired[i]), x, 60, COLORS.textDim, 9, al);
+    // effects on this tank
+    const st = game.tanks[i].status, tags = [];
+    if (st.frozen > 0 || (game.current === i && game.tanks[i].lock.angle)) tags.push(["FROZEN", "#9fe8ff"]);
+    if (st.emp > 0 || (game.current === i && game.tanks[i].lock.drive)) tags.push(["EMP", "#7fb0ff"]);
+    if (st.rad > 0) tags.push(["FALLOUT X" + st.rad, "#9aff6a"]);
+    if (st.confused > 0 || (game.current === i && game.tanks[i].lock.scramble)) tags.push(["DIZZY", "#ffe066"]);
+    tags.forEach((tg, k) => neonText(tg[0], x, 74 + k * 12, tg[1], 8, al));
   }
   ctx.globalAlpha = 1;
 
@@ -300,6 +365,7 @@ function drawHud() {
     if (!game.isAiTurn) neonText("DRIVE LEFT " + Math.round(game.moveLeft) + "  (A / D)", W / 2, 114, COLORS.textDim, 8, "center");
     if (game.tank.buried) neonText("BURIED IN DIRT - BLAST YOURSELF FREE", W / 2, 130, "#ffb060", 8, "center");
     else if (game.tank.sink > 0) neonText("STUCK IN THE MUD - DRIVE TO GET FREE", W / 2, 130, SEASON_COLORS.monsoon, 8, "center");
+    else if (game.statusNote) neonText(game.statusNote, W / 2, 130, "#ffe066", 8, "center");
     else if (!game.isAiTurn && guideBox.checked && guideIsApproximate(wp)) neonText("AIM GUIDE: FIRST SHELL, ROUGH PATH ONLY", W / 2, 130, COLORS.textDim, 8, "center");
   } else if (game.lastHit && game.phase !== "over") {
     neonText(game.lastHit.toUpperCase(), W / 2, 76, NEON.amber, 13, "center");
@@ -344,6 +410,7 @@ function draw() {
     }
   });
   drawAimGuide();
+  FX.drawFlames(ctx, game.flames);
   FX.drawShells(ctx, game.projs);
   FX.drawExplosions(ctx, game);
   FX.drawParticles(ctx);
@@ -713,6 +780,70 @@ window.addEventListener("keydown", (e) => {
   e.preventDefault();
 });
 
+// ---- Post-game statistics ------------------------------------------------
+const statsEl = document.getElementById("stats");
+let statsDismissed = false, overSince = 0;
+
+function weaponStars(st) {      // the weapon that won this player the most points
+  let best = null;
+  for (const name in st.weapons) {
+    const w = st.weapons[name];
+    if (w.points > 0 && (!best || w.points > best.points)) best = { name: name, points: w.points, uses: w.uses };
+  }
+  return best;
+}
+
+function renderStats() {
+  const S = game.stats, T = game.tanks;
+  const a = T[0].score, b = T[1].score;
+  document.getElementById("statsWinner").textContent = a === b ? "IT'S A DRAW!" : game.winnerText().toUpperCase();
+  const lead = (x, y, higherIsBetter) => (x === y ? [false, false] : higherIsBetter ? [x > y, y > x] : [x < y, y < x]);
+  const rows = [];
+  const add = (label, v0, v1, cmp, big, sub) => rows.push({ label, v: [v0, v1], win: cmp || [false, false], big: !!big, sub: sub || ["", ""] });
+  add("Final score", a, b, lead(a, b, true), true);
+  add("Shots fired", S[0].shots, S[1].shots);
+  const acc = (i) => (S[i].shots ? Math.round((100 * S[i].hits) / S[i].shots) + "%" : "-");
+  add("Hits", S[0].hits + " / " + S[0].shots, S[1].hits + " / " + S[1].shots, lead(S[0].hits, S[1].hits, true), false, [acc(0) + " accuracy", acc(1) + " accuracy"]);
+  add("Damage dealt", S[0].damage, S[1].damage, lead(S[0].damage, S[1].damage, true), false,
+      [S[0].dot ? S[0].dot + " from fire / fallout" : "", S[1].dot ? S[1].dot + " from fire / fallout" : ""]);
+  add("Lost to own shots", S[0].self, S[1].self, lead(S[0].self, S[1].self, false));
+  if (game.weather === "thunderstorm" || game.weather === "apocalypse") add("Lost to the storm", S[0].storm, S[1].storm, lead(S[0].storm, S[1].storm, false));
+  const best = (i) => (S[i].best.gain > 0 ? "+" + S[i].best.gain : "-");
+  add("Best shot", best(0), best(1), lead(S[0].best.gain, S[1].best.gain, true), false, [S[0].best.weapon, S[1].best.weapon]);
+  const crater = (i) => (S[i].crater.px > 0 ? S[i].crater.px.toLocaleString("en-US") + " px" : "-");
+  add("Biggest crater", crater(0), crater(1), lead(S[0].crater.px, S[1].crater.px, true), false, [S[0].crater.weapon, S[1].crater.weapon]);
+  const star = [weaponStars(S[0]), weaponStars(S[1])];
+  add("Top weapon", star[0] ? star[0].name : "-", star[1] ? star[1].name : "-", [false, false], false,
+      [star[0] ? "+" + star[0].points + " points" : "", star[1] ? "+" + star[1].points + " points" : ""]);
+  const tricks = (i) => [S[i].buries ? S[i].buries + " buried" : "", S[i].freezes ? S[i].freezes + " frozen" : "", S[i].irradiated ? S[i].irradiated + " irradiated" : "", S[i].stunned ? S[i].stunned + " EMP" : ""].filter(Boolean).join(", ") || "-";
+  add("Enemy tank hit by", tricks(0), tricks(1));
+  const nm = (i) => shortName(i);
+  let html = "<tr><th></th><th class='p0'>" + nm(0) + "</th><th class='p1'>" + nm(1) + "</th></tr>";
+  for (const r of rows) {
+    html += "<tr" + (r.big ? " class='big'" : "") + "><td class='lab'>" + r.label + "</td>";
+    for (let i = 0; i < 2; i++) html += "<td class='p" + i + (r.win[i] ? " win" : "") + "'>" + r.v[i] + (r.sub[i] ? "<small>" + r.sub[i] + "</small>" : "") + "</td>";
+    html += "</tr>";
+  }
+  document.getElementById("statsTable").innerHTML = html;
+}
+
+function updateStatsOverlay(now) {
+  if (game.phase !== "over" || menuOpen || draftOpen) {
+    overSince = 0;
+    statsDismissed = false;
+    statsEl.classList.add("hidden");
+    return;
+  }
+  if (!overSince) overSince = now;
+  if (!statsDismissed && now - overSince > 1800 && statsEl.classList.contains("hidden")) {
+    renderStats();
+    statsEl.classList.remove("hidden");
+  }
+}
+document.getElementById("statsRematch").addEventListener("click", () => { statsEl.classList.add("hidden"); rematch(); });
+document.getElementById("statsMenu").addEventListener("click", () => { statsEl.classList.add("hidden"); showMenu(); });
+document.getElementById("statsClose").addEventListener("click", () => { statsDismissed = true; statsEl.classList.add("hidden"); });
+
 // ---- The game loop: physics in fixed steps, drawing every frame -------
 let last = performance.now();
 let leftover = 0;
@@ -726,6 +857,7 @@ function frame(now) {
     leftover -= STEP;
   }
   Sound.observe(game, menuOpen || draftOpen);
+  updateStatsOverlay(now);
   syncControls();
   draw();
   requestAnimationFrame(frame);

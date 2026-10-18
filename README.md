@@ -8,7 +8,7 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 
 ## How to play
 - Pick 1 Player (vs the computer: Easy, Normal or Hard) or 2 Players on one screen from the main menu.
-- Press **Draft Battle** to draft your weapons, or **Quick Play** to start at once with 10 random weapons each. In the draft: players take turns picking 10 weapons each from a fresh random pool of 20 weapons (out of 52). A weapon that has been picked is gone for both players, and every new game reshuffles the pool. Each pick is one use in the battle.
+- Press **Draft Battle** to draft your weapons, or **Quick Play** to start at once with 10 random weapons each. In the draft: players take turns picking 10 weapons each from a fresh random pool of 20 weapons (out of 61). A weapon that has been picked is gone for both players, and every new game reshuffles the pool. Each pick is one use in the battle.
 - Loose dirt falls: overhangs and tunnel roofs collapse after every shot.
 - Each turn: optionally drive a little (60 px per turn), set angle and power, choose a weapon and fire. Watch the wind.
 - Hits earn points, hitting yourself loses points. Each player gets 10 shots.
@@ -22,12 +22,19 @@ Play it: https://mrdahl.github.io/rusty-tanks/
   - **Normal**: no weather effects. **Random**: a season picked at random for every match.
   - The numbers are constants at the top of `game.js` (SINK_PER_TURN, STRIKE_DAMAGE, HURRICANE_WIND and so on), so they are easy to tune.
 
+- **Elemental weapons** put effects on the tanks they catch:
+  - **Frost Shell / Cryo Bomb** freeze the enemy turret: it cannot be aimed on that tank's next turn (power and driving still work). In the Monsoon the mud where it lands freezes into solid ice that blasts cannot dig and tanks cannot sink into.
+  - **Napalm Shell / Fire Bomb / Lava Glob / Ember Rain** start flames that drop, run downhill into craters and burn for about 3 seconds (rain halves that in the Monsoon; fire also melts ice).
+  - **Nuclear Warhead / Dirty Bomb** leave fallout: every tank inside the zone (also the shooter!) loses points at the start of each of its next 3 turns, and its controls are scrambled for one turn.
+  - **EMP Pulse**: the victim can't drive or change power for a turn.
+  - Burying an enemy in dirt, freezing or EMP-ing him earns bonus points. A tank that drops into a hole takes fall damage (credited to whoever dug the hole).
 - Weapons have different explosion looks (fireballs, rings, sparks, dirt splats, electric arcs, fireworks, shockwaves) and dig holes of different shapes (wide, tall, diamond, star, cone, trench, bowl, ring and more).
 - Dirt weapons (Mud Pie, Avalanche, Spire, Triple Mound, Landfill) can bury a tank. A buried tank cannot drive; it must dig itself out with its own weapons.
 - The night sky sometimes has a moon and semi-transparent drifting clouds that the moon shines through.
 
 - Sound: every sound is synthesized live in the browser (no sound files). Every weapon has its own launch sound, and each of the 16 explosion styles has its own boom. The music is a chiptune in the style of old keygen tracks (fast arpeggios, bouncy bass, pulse lead, noise drums): a calmer track for the menus and a faster one for the battle. Click anywhere once to switch sound on; the Sound and Music boxes (or the M key) turn them off again.
 
+- When the match ends a **battle report** shows accuracy, damage, best shot, biggest crater, top weapon and more.
 - The game fills the whole window (no scrolling): the battlefield and the control panel (angle, power, weapon, FIRE, drive, switches) are one screen that scales to fit. Press F or the fullscreen button for true fullscreen.
 
 Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = drive, 1-9 and 0 = choose weapon 1-10, Space = fire, N or the Rematch button = new map, same weapons, M = music on/off, F = fullscreen, Esc = menu.
@@ -40,5 +47,10 @@ Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = dr
 - `sound.js`: synthesized sound effects and chiptune music (Web Audio)
 - `main.js`: drawing, menus, weapon draft and controls
 
-## Tests
+## Tests and balance
+The constants for the effects (`FLAME_TICK`, `BURY_BONUS`, `FREEZE_BONUS`, `FALL_DAMAGE`, ...) are at the top of `game.js`; each weapon's own numbers are in `weapons.js`.
+
+`node tests/balance.js shots 80` (see BALANCE.md for the latest report) lets the computer fire every weapon 80 times on random maps and prints the average points per shot, hit rate and effect rate. `node tests/balance.js matches 100` plays full computer-vs-computer matches with random weapon pools and prints how often the owner of each weapon wins. Use them after changing any weapon numbers.
+
+
 `node tests/run.js` runs the automatic checks (weapons, falling dirt, seasons, buried tanks, computer opponent). Run it after changing `game.js` or `weapons.js`.

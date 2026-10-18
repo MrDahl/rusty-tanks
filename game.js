@@ -43,6 +43,14 @@ const METEOR_REACH = 20;       // same for meteors
 const METEOR_BLAST = 26;       // size of a meteor crater
 const BOLT_AIM_BIAS = 0.2;     // chance that a bolt is aimed near a tank instead of anywhere (0 = pure luck)
 const METEOR_AIM_BIAS = 0;     // same for meteors (they fall completely at random)
+const FLAME_TICK = 0.4;        // seconds between burn damage ticks
+const FLAME_STEP_SPEED = 70;   // how fast a flame runs downhill (pixels per second)
+const BURY_BONUS = 16;         // points for burying an enemy tank in dirt
+const FREEZE_BONUS = 12;        // points for freezing an enemy turret
+const FALL_FREE = 16;          // a tank can drop this many pixels (when the ground under it is blasted away) without harm
+const FALL_DAMAGE = 0.6;       // ...then loses this many points per extra pixel (credited to whoever shot)
+const FALL_MAX = 20;           // ...but never more than this
+const CONFUSE_JITTER = 18;     // radiation sickness: how far the shot wobbles (degrees; power gets a bit more)
 const METEOR_FALL_TIME = 0.6;  // seconds a meteor is visible before it lands (main.js draws it)
 
 
@@ -108,6 +116,8 @@ class Terrain {
     this.dirtyX0 = 0;          // columns that changed since the picture was last painted
     this.dirtyX1 = W - 1;      // (main.js repaints only these, then calls clearDirty)
     this.unstable = new Set(); // columns that might have loose dirt (checked and dropped when stable)
+    this.ice = new Uint8Array(W * H); // 1 = frozen dirt: blasts can't dig it and it does not fall (monsoon + frost weapons)
+    this.removed = 0;          // how many dirt pixels explosions have dug away (for the statistics)
   }
 
   // The terrain changed in columns x0..x1: bump the version and remember the area to repaint
@@ -140,7 +150,7 @@ class Terrain {
         // bottom to top, so a falling block moves as one piece
         for (let y = H - 2; y >= 0; y--) {
           const i = y * W + x;
-          if (this.mask[i] === 1 && this.mask[i + W] === 0) {
+          if (this.mask[i] === 1 && this.mask[i + W] === 0 && !this.ice[i]) {
             this.mask[i + W] = 1;
             this.mask[i] = 0;
             m = true;
@@ -163,6 +173,49 @@ class Terrain {
     return this.mask[y * W + x] === 1;
   }
 
+  // Remove one pixel of dirt (frozen dirt resists)
+  dig(i) {
+    if (this.mask[i] === 1 && !this.ice[i]) { this.mask[i] = 0; this.removed++; }
+  }
+
+  // Freeze the dirt in a round patch into ice
+  freezeArea(cx, cy, r) {
+    const minX = Math.max(0, Math.floor(cx - r)), maxX = Math.min(W - 1, Math.ceil(cx + r));
+    const minY = Math.max(0, Math.floor(cy - r)), maxY = Math.min(H - 1, Math.ceil(cy + r));
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const i = y * W + x;
+        if (this.mask[i] === 1 && (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r) this.ice[i] = 1;
+      }
+    }
+    this.touch(minX, maxX);
+  }
+
+  // Fire melts frozen dirt back into ordinary dirt
+  melt(cx, cy, r) {
+    const minX = Math.max(0, Math.floor(cx - r)), maxX = Math.min(W - 1, Math.ceil(cx + r));
+    const minY = Math.max(0, Math.floor(cy - r)), maxY = Math.min(H - 1, Math.ceil(cy + r));
+    let changed = false;
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const i = y * W + x;
+        if (this.ice[i] && (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r) { this.ice[i] = 0; changed = true; }
+      }
+    }
+    if (changed) { this.markUnstable(minX, maxX); this.touch(minX, maxX); }
+  }
+
+  // Is there frozen ground under this x position?
+  iceAt(x, y) {
+    for (let dx = -6; dx <= 6; dx += 3) {
+      for (let dy = 0; dy <= 4; dy++) {
+        const xx = Math.floor(x + dx), yy = Math.floor(y + dy);
+        if (xx >= 0 && xx < W && yy >= 0 && yy < H && this.ice[yy * W + xx]) return true;
+      }
+    }
+    return false;
+  }
+
   // Remove a round bite of dirt (this is what explosions do)
   carveCircle(cx, cy, r) {
     const minX = Math.max(0, Math.floor(cx - r));
@@ -173,7 +226,7 @@ class Terrain {
       for (let x = minX; x <= maxX; x++) {
         const dx = x - cx;
         const dy = y - cy;
-        if (dx * dx + dy * dy <= r * r) this.mask[y * W + x] = 0;
+        if (dx * dx + dy * dy <= r * r) this.dig(y * W + x);
       }
     }
     this.markUnstable(minX, maxX);
@@ -189,7 +242,7 @@ class Terrain {
     const minY = Math.max(0, Math.floor(cy - ext)), maxY = Math.min(H - 1, Math.ceil(cy + ext));
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
-        if (inShape(shape, x - cx, y - cy, r, ph)) this.mask[y * W + x] = 0;
+        if (inShape(shape, x - cx, y - cy, r, ph)) this.dig(y * W + x);
       }
     }
     this.markUnstable(minX, maxX);
@@ -226,7 +279,7 @@ class Terrain {
   carveRect(x0, y0, w, h) {
     for (let y = Math.max(0, Math.floor(y0)); y < Math.min(H, Math.ceil(y0 + h)); y++) {
       for (let x = Math.max(0, Math.floor(x0)); x < Math.min(W, Math.ceil(x0 + w)); x++) {
-        this.mask[y * W + x] = 0;
+        this.dig(y * W + x);
       }
     }
     this.markUnstable(x0, x0 + w);
@@ -260,6 +313,7 @@ class Terrain {
   //  3. The hill between the tanks is never allowed to get huge
   generate(rand, tankXs) {
     this.mask.fill(0);
+    this.ice.fill(0);
 
     const base = 190 + rand() * 60;
     const amp = 0.7 + rand() * 0.6;
@@ -333,6 +387,20 @@ function stepProjectile(p, dt, wind, terrain, tanks) {
 }
 
 // ---- The game itself -------------------------------------------------
+// Numbers for the post-game statistics screen
+function newStats() {
+  return {
+    shots: 0, hits: 0,            // shots fired, and shots that scored points
+    damage: 0, self: 0,           // points won from the enemy, points lost to own shots
+    dot: 0,                       // ... of the damage: burning and radiation
+    storm: 0,                     // points lost to lightning and meteors
+    best: { gain: 0, weapon: "" },     // best single shot
+    crater: { px: 0, weapon: "" },     // biggest hole dug by one shot
+    weapons: {},                  // name -> { uses, hits, points }
+    buries: 0, freezes: 0, irradiated: 0, stunned: 0,   // how often this player buried / froze / irradiated / EMPed the enemy
+  };
+}
+
 class Game {
   // ai = [player1, player2]: null for a human, or "easy" / "normal" / "hard"
   // loadouts = [[weapon numbers player 1 drafted], [player 2's]], or nothing for the quick-test setup
@@ -372,7 +440,17 @@ class Game {
       buried: false,             // covered in dirt: cannot drive until a blast frees it
       pushLeft: 0, pushDir: 1,   // being shoved by a Gale Cannon / Gravity Well
       slide: 0,                  // iceage: sliding speed (pixels per second, + = right)
+      // Elemental effects. The numbers count the turns (of this tank) the effect still has to run.
+      status: { frozen: 0, emp: 0, confused: 0, rad: 0, radDmg: 0, radOwner: 0, radWeapon: null },
+      lock: { angle: false, power: false, drive: false, scramble: false },  // what is blocked during the current turn
+      burning: 0,                // > 0 while flames touch the tank (for the picture)
+      fall: 0, fallMoved: false, // pixels dropped since the tank last stood still (fall damage)
     }));
+    this.flames = [];            // burning blobs that run downhill (Napalm and friends)
+    this.flameClock = 0;
+    this.statusNote = "";        // message about effects at the start of a turn
+    this.stats = [newStats(), newStats()];
+    this.removedAtFire = 0;
     // ammo[player][weapon] = shots left (one per time it was drafted)
     this.loadouts = loadouts || null;
     this.ammo = [0, 1].map((p) =>
@@ -426,11 +504,15 @@ class Game {
 
   setAngle(deg, force) {
     if (this.isAiTurn && !force) return;
+    if (this.tank.lock.angle) return;                                  // frozen turret
+    if (this.tank.lock.scramble) deg += (Math.random() * 2 - 1) * 6;   // radiation sickness: the controls jitter
     if (this.phase === "aim") this.tank.angle = Math.max(0, Math.min(180, deg));
   }
 
   setPower(p, force) {
     if (this.isAiTurn && !force) return;
+    if (this.tank.lock.power) return;                                  // EMP: power dead
+    if (this.tank.lock.scramble) p += (Math.random() * 2 - 1) * 6;
     if (this.phase === "aim") this.tank.power = Math.max(5, Math.min(100, p));
   }
 
@@ -457,7 +539,7 @@ class Game {
     const t = this.tank;
     const other = this.tanks[1 - this.current];
     let moved = 0;
-    if (t.buried) return 0;                                      // stuck in dirt
+    if (t.buried || t.lock.drive) return 0;                      // stuck in dirt, or EMP-ed
     if (t.sink > 0 && !sliding) { t.y -= t.sink; t.sink = 0; }   // monsoon: drive out of the mud
     while (moved < dist - 1e-9 && (sliding || this.moveLeft > 1e-9)) {
       const step = sliding ? Math.min(1, dist - moved) : Math.min(1, dist - moved, this.moveLeft);
@@ -515,6 +597,15 @@ class Game {
     const w = WEAPON_LIST[t.weapon];
     this.ammo[this.current][t.weapon]--;
     this.shotsFired[this.current]++;
+    if (t.lock.scramble) {      // radiation sickness: the shot wobbles
+      t.angle = Math.max(0, Math.min(180, t.angle + (Math.random() * 2 - 1) * CONFUSE_JITTER));
+      t.power = Math.max(5, Math.min(100, t.power + (Math.random() * 2 - 1) * CONFUSE_JITTER * 1.2));
+    }
+    this.removedAtFire = this.terrain.removed;
+    const st = this.stats[this.current];
+    st.shots++;
+    const ws = st.weapons[w.name] || (st.weapons[w.name] = { uses: 0, hits: 0, points: 0 });
+    ws.uses++;
     this.turnGain = 0;
     this.turnSelf = 0;
     this.lastHit = "";
@@ -588,6 +679,8 @@ class Game {
     }
     if (this.phase === "aim" && this.weather === "iceage" && !this.drivingNow) this.slideStep(dt);
     this.pushStep(dt);
+    this.updateFlames(dt);
+    this.checkFalls();
 
     if (this.phase === "flight") {
       for (const p of this.projs.slice()) this.updateProjectile(p, dt);
@@ -615,7 +708,8 @@ class Game {
     } else if (this.phase === "settle") {
       this.fall();
       this.settleTime += dt;
-      if (this.terrain.unstable.size === 0 || this.settleTime >= SETTLE_MAX) this.endTurn();
+      const settled = this.terrain.unstable.size === 0 && this.flames.length === 0;
+      if (settled || this.settleTime >= SETTLE_MAX + 2) this.endTurn();
     } else if (this.phase === "weather") {
       this.updateWeather(dt);
     }
@@ -703,7 +797,7 @@ class Game {
 
   // A small shell made from a weapon's "split / burst / rain" settings
   fragment(spec, parent) {
-    return { name: "fragment", blast: spec.blast, damage: spec.damage, color: parent.color, dirt: spec.dirt, fx: parent.fxFrag || "pop" };
+    return { name: parent.name, blast: spec.blast, damage: spec.damage, color: parent.color, dirt: spec.dirt, fx: parent.fxFrag || "pop", flames: spec.flames };
   }
 
   // Reflect a shell off the ground
@@ -833,6 +927,10 @@ class Game {
 
     // ...and then does its extra trick
     if (w.push) this.pushTanks(x, y, w.push);
+    if (w.freeze) this.freezeBlast(x, y, owner, w);
+    if (w.emp) this.empBlast(x, y, owner, w);
+    if (w.nuke) this.nukeBlast(x, y, owner, w);
+    if (w.flames) this.spawnFlames(x, y, owner, w);
     if (w.arc) {
       const foe = this.tanks[1 - owner];
       const d = Math.hypot(x - foe.x, y - (foe.y - 8));
@@ -920,11 +1018,10 @@ class Game {
   // Points: the shooter gains when an enemy is hit, and loses them when hitting himself
   hurt(i, owner, points, w) {
     if (points <= 0) return;
+    this.applyDamage(i, owner, points, w);
     if (i === owner) {
-      this.tanks[owner].score -= points;
       this.turnSelf += points;
     } else {
-      this.tanks[owner].score += points;
       this.turnGain += points;
       if (w && w.scramble) { // Wobble Shot: mess up the victim's aim
         const t = this.tanks[i];
@@ -932,6 +1029,160 @@ class Game {
         t.power = 30 + this.rand() * 60;
       }
     }
+  }
+
+  // Move the points around and keep the statistics (no messages)
+  applyDamage(i, owner, points, w) {
+    const st = this.stats[owner];
+    if (i === owner) {
+      this.tanks[owner].score -= points;
+      st.self += points;
+    } else {
+      this.tanks[owner].score += points;
+      st.damage += points;
+      if (w && w.name && st.weapons[w.name]) st.weapons[w.name].points += points;
+    }
+  }
+
+  // ---- Elemental effects ----
+  // Frost: freezes the turret of every tank near the blast (it cannot be aimed during that tank's next turn)
+  freezeBlast(x, y, owner, w) {
+    const F = w.freeze;
+    let hit = false;
+    this.tanks.forEach((t, i) => {
+      if (Math.hypot(x - t.x, y - (t.y - 8)) > F.range) return;
+      if (t.status.frozen < F.turns) {
+        if (i !== owner && t.status.frozen === 0) { this.tanks[owner].score += FREEZE_BONUS; this.stats[owner].damage += FREEZE_BONUS; this.turnGain += FREEZE_BONUS; this.stats[owner].freezes++; }
+        t.status.frozen = F.turns;
+        hit = true;
+      }
+    });
+    if (hit) this.turnNote = "Turret frozen!";
+    // In the monsoon the mud freezes solid where it lands: ice that blasts cannot dig and tanks cannot sink into
+    if (this.weather === "monsoon" && F.ice) {
+      this.terrain.freezeArea(x, y + 4, F.ice);
+      this.turnNote = (hit ? "Turret frozen! " : "") + "Mud frozen into ice!";
+    }
+  }
+
+  // EMP: no driving and no power adjusting for the victim's next turn
+  empBlast(x, y, owner, w) {
+    const E = w.emp;
+    let hit = false;
+    this.tanks.forEach((t, i) => {
+      if (Math.hypot(x - t.x, y - (t.y - 8)) > E.range) return;
+      if (i !== owner && t.status.emp === 0) { this.tanks[owner].score += FREEZE_BONUS; this.stats[owner].damage += FREEZE_BONUS; this.turnGain += FREEZE_BONUS; this.stats[owner].stunned++; }
+      t.status.emp = Math.max(t.status.emp, E.turns);
+      hit = true;
+    });
+    if (hit) this.turnNote = "EMP! No driving, power dead";
+  }
+
+  // Nuclear: everything inside the fallout zone (including the shooter!) takes damage for 3 turns
+  // and gets scrambled controls on its next turn
+  nukeBlast(x, y, owner, w) {
+    const N = w.nuke;
+    this.addExplosion(x, y, N.range, "fire", { style: "fallout", color: w.color });
+    const names = [];
+    this.tanks.forEach((t, i) => {
+      if (Math.hypot(x - t.x, y - (t.y - 8)) > N.range) return;
+      t.status.rad = N.turns;
+      t.status.radDmg = N.dmg;
+      t.status.radOwner = owner;
+      t.status.radWeapon = w;
+      t.status.confused = Math.max(t.status.confused, N.confuse || 1);
+      if (i !== owner) this.stats[owner].irradiated++;
+      names.push(this.playerName(i));
+    });
+    if (names.length) this.turnNote = "Fallout! " + names.join(" and ") + " irradiated";
+  }
+
+  // Flames: blobs of fire that drop, run downhill into craters, and burn for a few seconds
+  spawnFlames(x, y, owner, w) {
+    const F = w.flames;
+    const life = F.life * (this.weather === "monsoon" ? 0.5 : 1);   // rain puts fires out quickly
+    for (let i = 0; i < F.count; i++) {
+      this.flames.push({
+        x: x + (this.rand() - 0.5) * 8, y: y - 4, vx: (this.rand() * 2 - 1) * F.speed, vy: -(20 + this.rand() * F.speed * 0.9),
+        air: true, life: life * (0.8 + this.rand() * 0.4), max: life, owner: owner, w: w, r: F.r || 9, dps: F.dps, seed: this.rand() * 6.28,
+      });
+    }
+    this.terrain.melt(x, y, (w.blast || 10) + 12);
+    this.turnNote = "Fire!";
+  }
+
+  updateFlames(dt) {
+    if (!this.flames.length) { for (const t of this.tanks) t.burning = 0; return; }
+    for (const t of this.tanks) t.burning = Math.max(0, t.burning - dt);
+    for (const f of this.flames) {
+      f.life -= dt;
+      if (f.air) {
+        f.vy += GRAVITY * dt;
+        f.x += f.vx * dt;
+        f.y += f.vy * dt;
+        if (f.x < 2 || f.x > W - 2 || f.y >= H) { f.life = 0; continue; }
+        if (this.terrain.isSolid(f.x, f.y + 1)) {            // landed
+          f.air = false;
+          f.y = this.terrain.surfaceY(f.x, Math.max(0, f.y - 14));
+        }
+      } else {
+        // on the ground: roll toward the lower side, so fire pours into craters and valleys
+        const here = this.terrain.surfaceY(f.x, Math.max(0, f.y - 20));
+        if (here >= H) { f.air = true; f.vx = 0; f.vy = 0; continue; }
+        f.y = here;
+        const hl = this.terrain.surfaceY(f.x - 3, Math.max(0, here - 20));
+        const hr = this.terrain.surfaceY(f.x + 3, Math.max(0, here - 20));
+        const low = Math.max(hl, hr);                          // bigger y = lower ground
+        if (low > here + 0.5) {
+          const dir = hr > hl ? 1 : -1;
+          f.x = Math.max(2, Math.min(W - 2, f.x + dir * FLAME_STEP_SPEED * dt));
+          f.y = this.terrain.surfaceY(f.x, Math.max(0, here - 20));
+        }
+        if (f.life > 0 && Math.random() < dt * 4) this.terrain.melt(f.x, f.y, 6);
+      }
+    }
+    this.flames = this.flames.filter((f) => f.life > 0);
+    // burn damage on a fixed beat: every tank touching flames takes damage (several flames hurt more, up to 3x)
+    this.flameClock += dt;
+    if (this.flameClock >= FLAME_TICK) {
+      this.flameClock -= FLAME_TICK;
+      this.tanks.forEach((t, i) => {
+        let sum = 0, top = null;
+        for (const f of this.flames) {
+          if (Math.abs(f.x - t.x) <= f.r + 8 && Math.abs(f.y - (t.y - 8)) <= f.r + 14) {
+            sum += f.dps;
+            if (!top || f.dps > top.dps) top = f;
+          }
+        }
+        if (!top) return;
+        t.burning = 0.5;
+        const pts = Math.max(1, Math.round(Math.min(sum, top.dps * 3) * FLAME_TICK));
+        this.hurt(i, top.owner, pts, top.w);
+        if (i !== top.owner) this.stats[top.owner].dot += pts;
+      });
+    }
+  }
+
+  // The start of a player's turn: apply the effects that were waiting for them
+  beginTurnStatus() {
+    const t = this.tank, s = t.status, i = this.current;
+    t.lock = { angle: s.frozen > 0, power: s.emp > 0, drive: s.emp > 0, scramble: s.confused > 0 };
+    const notes = [];
+    if (s.frozen > 0) { s.frozen--; notes.push("TURRET FROZEN - CAN'T AIM"); }
+    if (s.emp > 0) { s.emp--; notes.push("EMP - CAN'T DRIVE OR SET POWER"); }
+    if (s.rad > 0) {
+      s.rad--;
+      this.applyDamage(i, s.radOwner, s.radDmg, s.radWeapon);
+      if (i !== s.radOwner) this.stats[s.radOwner].dot += s.radDmg;
+      notes.push("RADIATION -" + s.radDmg + " (" + s.rad + " TURNS LEFT)");
+    }
+    if (s.confused > 0) {
+      s.confused--;
+      t.angle = t.angle <= 90 ? 15 + Math.random() * 70 : 105 + Math.random() * 60;
+      t.power = 25 + Math.random() * 70;
+      notes.push("CONTROLS SCRAMBLED");
+    }
+    this.statusNote = notes.join("   ");
   }
 
   // ---- Buried tanks ----
@@ -956,6 +1207,12 @@ class Game {
         t.slide = 0;
         t.sink = 0;
         names.push(this.playerName(i));
+        if (i !== this.current) {                 // burying the enemy earns points
+          this.tanks[this.current].score += BURY_BONUS;
+          this.stats[this.current].damage += BURY_BONUS;
+          this.stats[this.current].buries++;
+          this.turnGain += BURY_BONUS;
+        }
       }
     });
     if (names.length) this.turnNote = "Buried " + names.join(" and ") + "!";
@@ -1007,17 +1264,48 @@ class Game {
   // Tanks drop down if the ground vanishes, and ride up if dirt piles under them
   settleTanks() {
     for (const t of this.tanks) {
+      const y0 = t.y - t.sink;
       t.y -= t.sink;                                  // find the surface, then sink back into the mud
       if (t.buried && this.coverage(t) < 0.25) t.buried = false;   // a blast dug it free
       if (!t.buried) while (t.y > 0 && this.terrain.isSolid(t.x, t.y - 6)) t.y--;
       while (t.y < H && !this.terrain.isSolid(t.x, t.y + 1)) t.y++;
+      if (t.y - y0 > 0 && !t.buried) { t.fall += t.y - y0; t.fallMoved = true; }   // dropped: remember how far
       t.y += t.sink;
     }
+  }
+
+  // A tank that dropped into a hole and has landed takes fall damage (credited to the player whose shot dug the hole)
+  checkFalls() {
+    this.tanks.forEach((t, i) => {
+      if (t.fall <= 0) return;
+      if (t.fallMoved) { t.fallMoved = false; return; }          // still falling
+      const drop = t.fall;
+      t.fall = 0;
+      if (this.phase === "weather" || this.phase === "aim" || this.phase === "over") return;
+      const pts = Math.min(FALL_MAX, Math.round((drop - FALL_FREE) * FALL_DAMAGE));
+      if (pts > 0) {
+        this.hurt(i, this.current, pts, this.usedWeapon);
+        this.turnNote = "Fell " + Math.round(drop) + " px! -" + pts;
+      }
+    });
   }
 
   endTurn() {
     this.explosions = [];
     this.projs = [];
+    this.flames = [];
+    this.checkFalls(); this.checkFalls();
+    // statistics for the shot that just finished
+    {
+      const st = this.stats[this.current], w = this.usedWeapon;
+      if (this.turnGain > 0) {
+        st.hits++;
+        if (w && st.weapons[w.name]) st.weapons[w.name].hits++;
+      }
+      if (this.turnGain > st.best.gain) st.best = { gain: this.turnGain, weapon: w ? w.name : "" };
+      const dug = this.terrain.removed - this.removedAtFire;
+      if (dug > st.crater.px) st.crater = { px: dug, weapon: w ? w.name : "" };
+    }
     if (this.shotsFired[0] >= this.shotLimit && this.shotsFired[1] >= this.shotLimit) {
       // Thunderstorm and Apocalypse: one last round of lightning / meteors, then the result
       // (so the player who shoots last still has a fair chance of being helped by the weather)
@@ -1027,7 +1315,7 @@ class Game {
       return;
     }
     // Monsoon: a tank that sat still this turn sinks deeper into the mud
-    if (this.weather === "monsoon" && this.turnMoved < 1 && !this.tank.buried) {
+    if (this.weather === "monsoon" && this.turnMoved < 1 && !this.tank.buried && !this.terrain.iceAt(this.tank.x, this.tank.y)) {
       const t = this.tank;
       const d = Math.min(SINK_PER_TURN, SINK_MAX - t.sink);
       if (d > 0) { t.sink += d; t.y += d; }
@@ -1036,6 +1324,7 @@ class Game {
     this.moveLeft = MOVE_BUDGET;
     this.turnMoved = 0;
     this.moveDir = 0;
+    this.beginTurnStatus();
     this.changeWind();
     this.beginWeather();
   }
@@ -1108,6 +1397,7 @@ class Game {
     }
     if (victim) {
       victim.score -= STRIKE_DAMAGE;
+      this.stats[victimIndex].storm += STRIKE_DAMAGE;
       this.lastHit = (meteor ? "Meteor" : "Lightning") + " hit " + this.playerName(victimIndex) + "! -" + STRIKE_DAMAGE;
     }
     this.settleTanks();
@@ -1166,12 +1456,12 @@ class Game {
 
     // Step 4: slide the angle and power to the chosen numbers, like a player adjusting them
     const k = Math.min(1, dt * 3);
-    t.angle += (plan.shot.angle - t.angle) * k;
-    t.power += (plan.shot.power - t.power) * k;
+    if (!t.lock.angle) t.angle += (plan.shot.angle - t.angle) * k;
+    if (!t.lock.power) t.power += (plan.shot.power - t.power) * k;
     plan.timer -= dt;
     if (plan.timer <= 0) {
-      t.angle = plan.shot.angle;
-      t.power = plan.shot.power;
+      if (!t.lock.angle) t.angle = plan.shot.angle;
+      if (!t.lock.power) t.power = plan.shot.power;
       this.aiPlan = null;
       this.fire(true);
     }
@@ -1209,7 +1499,7 @@ class Game {
       }
     }
     const chance = difficulty === "easy" ? 0.4 : difficulty === "normal" ? 0.75 : 1;
-    if (this.moveLeft < 10 || this.rand() > chance) return null;
+    if (this.tank.lock.drive || this.moveLeft < 10 || this.rand() > chance) return null;
     const w = WEAPON_LIST[weaponIndex];
     const here = this.findBestShot(w, 4);
     if (here.miss < 25) return null;                 // already has a good shot
@@ -1254,7 +1544,7 @@ class Game {
     const difficulty = this.ai[this.current];
     const errorSize = AI_ERROR[difficulty] !== undefined ? AI_ERROR[difficulty] : AI_ERROR.normal;
 
-    const perfect = this.findBestShot(WEAPON_LIST[weaponIndex]);
+    const perfect = this.findBestShot(WEAPON_LIST[weaponIndex], undefined, this.tank.lock);
 
     // Miscalculation: angle is measured as "how high the barrel points" (0-90),
     // so the same percentage works whether the enemy is to the left or right.
@@ -1275,13 +1565,17 @@ class Game {
       (w.line ? w.line.count * w.line.spacing : 0) +
       (w.rain ? w.rain.spread : 0) +
       (w.shape ? w.blast * 0.9 : 0) +
-      (w.burst ? 40 : 0);
+      (w.burst ? 40 : 0) +
+      (w.nuke ? w.nuke.range * 0.85 : 0) +                       // fallout zone
+      (w.flames ? 35 : 0) +
+      (w.freeze ? w.freeze.range * 0.5 : 0) +
+      (w.emp ? w.emp.range * 0.5 : 0);
   }
 
   // Try lots of angle/power combinations using the real physics and keep
   // the one that lands closest to the enemy (without blowing up itself).
   // `coarse` = step size of the first sweep (smaller = more careful but slower).
-  findBestShot(w, coarse) {
+  findBestShot(w, coarse, locks) {
     if (typeof w === "number") w = { blast: w };        // old calling style: just a blast size
     coarse = coarse || 2;
     const me = this.tank;
@@ -1307,6 +1601,16 @@ class Game {
       return miss;
     };
 
+    // A frozen turret can't change its angle and an EMP-ed tank can't change its power: search only what is free
+    const fa = locks && locks.angle ? me.angle : null;
+    const fp = locks && locks.power ? me.power : null;
+    const rng = (lo, hi, st, fixed) => {
+      if (fixed !== null) return [fixed];
+      const out = [];
+      for (let v = lo; v <= hi + 1e-9; v += st) out.push(v);
+      return out;
+    };
+
     let best = { angle: 45, power: 50, miss: Infinity };
     const tryShot = (angle, power) => {
       const miss = score(angle, power);
@@ -1319,8 +1623,8 @@ class Game {
     //  3. the finest search around the winner
     const found = [];
     const step1 = coarse * 2;
-    for (let angle = 5; angle <= 175; angle += step1) {
-      for (let power = 15; power <= 100; power += step1) {
+    for (const angle of rng(5, 175, step1, fa)) {
+      for (const power of rng(15, 100, step1, fp)) {
         const miss = score(angle, power);
         found.push({ angle, power, miss });
         if (miss < best.miss) best = { angle, power, miss };
@@ -1333,15 +1637,15 @@ class Game {
       if (seeds.every((s) => Math.abs(s.angle - f.angle) > step1 || Math.abs(s.power - f.power) > step1)) seeds.push(f);
     }
     for (const sd of seeds) {
-      for (let angle = sd.angle - step1; angle <= sd.angle + step1; angle += 1) {
-        for (let power = sd.power - step1; power <= sd.power + step1; power += 1) {
+      for (const angle of rng(sd.angle - step1, sd.angle + step1, 1, fa)) {
+        for (const power of rng(sd.power - step1, sd.power + step1, 1, fp)) {
           if (angle >= 0 && angle <= 180 && power >= 5 && power <= 100) tryShot(angle, power);
         }
       }
     }
     const a0 = best.angle, p0 = best.power;
-    for (let angle = a0 - 1; angle <= a0 + 1; angle += 0.5) {
-      for (let power = p0 - 1; power <= p0 + 1; power += 0.5) {
+    for (const angle of rng(a0 - 1, a0 + 1, 0.5, fa)) {
+      for (const power of rng(p0 - 1, p0 + 1, 0.5, fp)) {
         if (angle >= 0 && angle <= 180 && power >= 5 && power <= 100) tryShot(angle, power);
       }
     }

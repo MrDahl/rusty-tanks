@@ -259,7 +259,43 @@ const Sound = (function () {
       tone(d, { t, dur: 1.6, f0: 46, f1: 28, vol: 0.6, type: "sawtooth", lp: 140, am: { rate: 9, depth: 0.5 } });
       for (let i = 0; i < 4; i++) tone(d, { t: t + i * 0.24, dur: 0.3, f0: 62, f1: 30, vol: 0.9 / (1 + i * 0.5) });
     },
-    // lightning: sharp crack, then rolling thunder
+    // ice: a glassy crack and tinkling shards
+    frost(d, t, k) {
+      noise(d, { t, dur: 0.1, type: "highpass", f0: 3500, vol: 0.8, atk: 0.001 });
+      tone(d, { t, dur: 0.25, f0: 160 * k, f1: 70 * k, vol: 0.7 });
+      for (let i = 0; i < 8; i++) {
+        const tt = t + 0.04 + i * rnd(0.04, 0.08), f = rnd(2400, 5200);
+        tone(d, { t: tt, dur: 0.18, f0: f, f1: f * 0.98, vol: 0.14, type: "sine" });
+        tone(d, { t: tt, dur: 0.12, f0: f * 1.5, vol: 0.06, type: "sine" });
+      }
+    },
+    // fire: a roaring whoomph and crackle
+    flame(d, t, k) {
+      noise(d, { t, dur: 0.6, type: "bandpass", f0: 500, f1: 1800, q: 0.9, vol: 0.8, atk: 0.06 });
+      tone(d, { t, dur: 0.45, f0: 120 * k, f1: 45 * k, vol: 0.8 });
+      for (let i = 0; i < 10; i++) noise(d, { t: t + 0.1 + i * rnd(0.03, 0.08), dur: 0.02, type: "highpass", f0: rnd(2500, 6000), vol: 0.3 });
+    },
+    // nuclear: deep, long boom, a rising whine and a sub drop
+    nuke(d, t, k) {
+      tone(d, { t, dur: 1.9, f0: 80 * k, f1: 20, vol: 1.3 });
+      tone(d, { t: t + 0.05, dur: 1.2, f0: 220, f1: 40, vol: 0.5, type: "sawtooth", lp: 700 });
+      noise(d, { t, dur: 1.8, f0: 2600, f1: 60, vol: 1.1 });
+      noise(d, { t, dur: 2.0, brown: true, f0: 500, f1: 50, vol: 1.5 });
+      tone(d, { t: t + 0.25, dur: 1.4, f0: 300, f1: 1100, vol: 0.12, type: "sine", vib: { rate: 7, cents: 60 } });   // eerie whine
+      for (let i = 0; i < 10; i++) noise(d, { t: t + 0.4 + i * rnd(0.08, 0.16), dur: 0.02, type: "highpass", f0: rnd(2000, 5000), vol: 0.35 });
+    },
+    // the fallout cloud: geiger counter clicks
+    fallout(d, t) {
+      for (let i = 0; i < 22; i++) noise(d, { t: t + i * rnd(0.02, 0.07), dur: 0.012, type: "highpass", f0: rnd(3500, 6500), vol: rnd(0.25, 0.6) });
+      tone(d, { t, dur: 0.9, f0: 90, f1: 70, vol: 0.18, type: "sine", am: { rate: 6, depth: 0.7 } });
+    },
+    // EMP: a falling zap and a power-down
+    emp(d, t) {
+      tone(d, { t, dur: 0.5, f0: 3200, f1: 90, vol: 0.28, type: "square", am: { rate: 70, depth: 0.8 } });
+      tone(d, { t: t + 0.05, dur: 0.6, f0: 900, f1: 55, vol: 0.3, type: "sawtooth", lp: 1400 });
+      noise(d, { t, dur: 0.15, type: "highpass", f0: 5000, vol: 0.6 });
+      tone(d, { t, dur: 0.25, f0: 100, f1: 45, vol: 0.7 });
+    },
     bolt(d, t) {
       noise(d, { t, dur: 0.1, type: "highpass", f0: 2200, f1: 9000, vol: 1.2, atk: 0.001 });
       noise(d, { t, dur: 0.18, type: "bandpass", f0: 3000, f1: 800, q: 0.8, vol: 0.9, atk: 0.001 });
@@ -360,6 +396,20 @@ const Sound = (function () {
       noise(d, { t, dur: 0.5, type: "bandpass", f0: 250, f1: 1500 * p, q: 1.2, vol: 0.9, atk: 0.12 });
       tone(d, { t, dur: 0.12, f0: 130, f1: 60, vol: 0.5 });
     },
+    icy(d, t, p) {          // a glassy "tink"
+      tone(d, { t, dur: 0.3, f0: 1800 * p, f1: 1700 * p, vol: 0.22 });
+      tone(d, { t: t + 0.04, dur: 0.25, f0: 2700 * p, vol: 0.14 });
+      tone(d, { t, dur: 0.14, f0: 190, f1: 70, vol: 0.6 });
+    },
+    burn(d, t, p) {         // a hissing fire-whoosh
+      noise(d, { t, dur: 0.45, type: "bandpass", f0: 400, f1: 1500, q: 0.9, vol: 0.9, atk: 0.1 });
+      tone(d, { t, dur: 0.15, f0: 170, f1: 60, vol: 0.7 });
+    },
+    siren(d, t, p) {        // the big one: a low horn
+      tone(d, { t, dur: 0.6, f0: 110 * p, f1: 70 * p, vol: 0.9 });
+      tone(d, { t, dur: 0.7, f0: 220 * p, f1: 330 * p, vol: 0.18, type: "sawtooth", lp: 900, vib: { rate: 8, cents: 40 } });
+      noise(d, { t, dur: 0.4, f0: 1200, f1: 90, vol: 0.7 });
+    },
     magnet(d, t, p) {       // homing weapons get a rising "seeking" tone
       LAUNCH.cannon(d, t, p);
       tone(d, { t: t + 0.05, dur: 0.35, f0: 420, f1: 1050, vol: 0.18, type: "triangle", vib: { rate: 12, cents: 40 } });
@@ -368,7 +418,7 @@ const Sound = (function () {
   const LAUNCH_BY_FX = {
     blast: "cannon", mega: "heavy", pop: "pip", spark: "pip", flare: "rocket", pulse: "sonar", ring: "bell",
     dust: "plop", splat: "plop", dig: "motor", shape: "clang", electric: "zap", firework: "rocket",
-    slag: "sizzle", gale: "whoosh", quake: "heavy",
+    slag: "sizzle", gale: "whoosh", quake: "heavy", frost: "icy", flame: "burn", nuke: "siren", emp: "zap",
   };
 
   function launchSound(w, idx, x, t) {
@@ -439,6 +489,13 @@ const Sound = (function () {
       } else {
         noise(d, { t, dur: 1.2, brown: true, f0: 400, f1: 80, vol: 1.0, atk: 0.4 });
       }
+    },
+    status(t, note) {     // a short sound for whatever effect starts on a turn
+      const d = channel(sfxBus, 0.7);
+      if (/FROZEN/.test(note)) { [2600, 3400, 2000].forEach((f, i) => tone(d, { t: t + i * 0.06, dur: 0.2, f0: f, vol: 0.2 })); noise(d, { t, dur: 0.06, type: "highpass", f0: 4000, vol: 0.5 }); }
+      if (/EMP/.test(note)) { tone(d, { t, dur: 0.4, f0: 2000, f1: 80, vol: 0.2, type: "square", am: { rate: 60, depth: 0.8 } }); }
+      if (/RADIATION/.test(note)) { for (let i = 0; i < 14; i++) noise(d, { t: t + i * rnd(0.03, 0.08), dur: 0.012, type: "highpass", f0: rnd(3500, 6500), vol: 0.5 }); tone(d, { t, dur: 0.5, f0: 330, f1: 260, vol: 0.12, type: "triangle", vib: { rate: 9, cents: 80 } }); }
+      if (/SCRAMBLED/.test(note)) { for (let i = 0; i < 6; i++) tone(d, { t: t + 0.25 + i * 0.07, dur: 0.07, f0: rnd(300, 1400), vol: 0.14, type: "square", lp: 2500 }); }
     },
     win(t) {
       const d = channel(sfxBus, 0.7), p = pulse(0.25);
@@ -700,7 +757,7 @@ const Sound = (function () {
   // ---------------------------------------------------------------
   const seen = {
     seed: null, phase: "", explId: 0, score: [0, 0], buried: [false, false], current: -1,
-    angle: null, power: null, weapon: null, lastTick: 0, driveUntil: 0, over: false, tank: -1,
+    angle: null, power: null, weapon: null, lastTick: 0, driveUntil: 0, over: false, tank: -1, note: "",
   };
 
   function observe(game, inMenu) {
@@ -784,6 +841,12 @@ const Sound = (function () {
       seen.angle = t.angle; seen.power = t.power; seen.weapon = t.weapon;
     }
     seen.current = game.current;
+    if (game.phase === "aim" && game.statusNote && game.statusNote !== seen.note && sfxOn) SMALL.status(now + 0.1, game.statusNote);
+    seen.note = game.phase === "aim" ? game.statusNote : "";
+    // crackling while flames burn
+    if (game.flames.length && sfxOn && Math.random() < Math.min(0.5, game.flames.length * 0.06)) {
+      noise(channel(sfxBus, 0.35, 0), { t: now + 0.005, dur: 0.02, type: "highpass", f0: 2000 + Math.random() * 3500, vol: 0.4 });
+    }
 
     // the end of the game
     if (game.phase === "over" && !seen.over) {

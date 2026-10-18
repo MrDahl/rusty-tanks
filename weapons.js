@@ -50,9 +50,18 @@
 //    arc      = { range, damage } an electric arc jumps to the enemy tank
 //    quake    = { range, damage } a shockwave along the ground hurts every tank in range
 //
+//  Elements (these set effects on the tanks they catch):
+//    freeze   = { range, turns, ice } locks the turret (angle) for that many turns; in the monsoon
+//               the mud within "ice" pixels freezes solid (blasts can't dig it, tanks can't sink in it)
+//    emp      = { range, turns } no driving and no power adjusting
+//    flames   = { count, speed, life, dps, r } burning blobs that drop, run downhill into craters and
+//               burn for "life" seconds (dps = damage per second; rain halves the time in the monsoon)
+//    nuke     = { range, dmg, turns, confuse } everything in range (also the shooter!) takes "dmg" at the
+//               start of each of its next "turns" turns, and its controls are scrambled when it is its turn
+//
 //  Looks:
 //    fx       = the explosion style: blast, mega, pop, spark, flare, pulse, ring, dust, splat,
-//               dig, shape, electric, firework, slag, gale, quake  (see fx.js)
+//               dig, shape, electric, firework, slag, gale, quake, frost, flame, nuke, emp  (see fx.js)
 //    fxFrag   = style used by the small shells this weapon makes
 // =====================================================================
 const WEAPONS = [
@@ -89,7 +98,7 @@ const WEAPONS = [
   { name: "Magnet Dart",  blast: 28, damage: 42, ammo: 2, color: "#b05a9a", fx: "pulse", ai: true,
     homing: { range: 160, accel: 700 },
     info: "Curves toward an enemy tank that gets close." },
-  { name: "Needle Gun",   blast: 7,  damage: 95, ammo: 2, color: "#e8e8e8", fx: "flare", ai: true,
+  { name: "Needle Gun",   blast: 13, damage: 100, ammo: 2, color: "#e8e8e8", fx: "flare", ai: true,
     speed: 1.45, gravity: 0.2, windScale: 0.25,
     info: "Fast and flat. Tiny blast, huge damage - only a direct hit counts." },
   { name: "Proximity Pod", blast: 42, damage: 60, ammo: 2, color: "#5aa05a", fx: "ring", ai: true,
@@ -100,13 +109,13 @@ const WEAPONS = [
   { name: "Ricochet Rivet", blast: 28, damage: 40, ammo: 2, color: "#7fa6b3", fx: "pop",
     bounces: 6, elasticity: 0.85,
     info: "Skips along the ground 6 times." },
-  { name: "Ticker",       blast: 52, damage: 70, ammo: 2, color: "#c04a2a", fx: "ring",
+  { name: "Ticker",       blast: 52, damage: 60, ammo: 2, color: "#c04a2a", fx: "ring",
     bounces: Infinity, elasticity: 0.55, fuse: 2.6,
     info: "Bounces around and explodes 2.6 seconds after launch." },
-  { name: "Rolling Barrel", blast: 40, damage: 60, ammo: 2, color: "#8a6a3a", fx: "dust",
+  { name: "Rolling Barrel", blast: 40, damage: 42, ammo: 2, color: "#8a6a3a", fx: "dust",
     rolls: { speed: 150, time: 5 },
     info: "Lands, then rolls along the ground until it hits something." },
-  { name: "Wrecker",      blast: 14, damage: 90, ammo: 2, color: "#555555", fx: "mega",
+  { name: "Wrecker",      blast: 14, damage: 80, ammo: 2, color: "#555555", fx: "mega",
     rolls: { speed: 95, time: 6 },
     info: "Slow rolling ball with a tiny blast and a huge punch." },
 
@@ -127,17 +136,17 @@ const WEAPONS = [
   { name: "Shrapnel Pod", blast: 26, damage: 30, ammo: 2, color: "#c0a040", fx: "spark", ai: true,
     burst: { count: 7, speed: 190, blast: 16, damage: 14 }, fxFrag: "spark",
     info: "Explodes, then sprays 7 shells upward." },
-  { name: "Fuse Line",    blast: 18, damage: 26, ammo: 2, color: "#d98a3a", fx: "ring", ai: true,
-    line: { count: 5, spacing: 22, blast: 18, damage: 26 },
+  { name: "Fuse Line",    blast: 18, damage: 21, ammo: 2, color: "#d98a3a", fx: "ring", ai: true,
+    line: { count: 5, spacing: 22, blast: 18, damage: 21 },
     info: "A row of blasts running along the ground both ways." },
   { name: "Chain Rattler", blast: 22, damage: 26, ammo: 2, color: "#a04a4a", fx: "pop", ai: true,
     scatter: { count: 7, radius: 85, blast: 22, damage: 26 },
     info: "Random blasts all around the landing spot." },
   { name: "Hail of Slag", blast: 18, damage: 20, ammo: 2, color: "#6a6a7a", fx: "slag", ai: true,
-    rain: { count: 8, spread: 110, stagger: 0.12, speed: 340, blast: 24, damage: 30 }, fxFrag: "slag",
+    rain: { count: 8, spread: 110, stagger: 0.12, speed: 340, blast: 24, damage: 22 }, fxFrag: "slag",
     info: "Slag rains from the sky around the landing spot." },
   { name: "Crusher Drop", blast: 14, damage: 10, ammo: 2, color: "#3a3a4a", fx: "mega", ai: true,
-    rain: { count: 1, spread: 0, stagger: 0.25, speed: 520, blast: 46, damage: 85 },
+    rain: { count: 1, spread: 0, stagger: 0.25, speed: 520, blast: 46, damage: 72 },
     info: "A heavy weight falls on the landing spot from above." },
 
   // ---- tricks ----
@@ -213,21 +222,49 @@ const WEAPONS = [
   { name: "Hornet Swarm", blast: 16, damage: 20, ammo: 2, color: "#ffcc33", fx: "pop", ai: true,
     volley: { count: 4, fan: 22, stagger: 0.1 }, homing: { range: 130, accel: 550 },
     info: "Four small shells that curve toward an enemy tank." },
-  { name: "Anvil",        blast: 56, damage: 90, ammo: 2, color: "#6a6a7a", fx: "mega", ai: true,
-    speed: 0.85, gravity: 1.7, windScale: 0.4,
+  { name: "Anvil",        blast: 56, damage: 75, ammo: 2, color: "#6a6a7a", fx: "mega", ai: true,
+    speed: 1.0, gravity: 1.7, windScale: 0.4,
     info: "Heavy: a short, steep arc and a big hit." },
   { name: "Firework Rocket", blast: 22, damage: 24, ammo: 2, color: "#ff5ad0", fx: "firework", fxFrag: "firework", ai: true,
     burst: { count: 14, speed: 210, blast: 14, damage: 14 },
     info: "Explodes in a colourful shower of shells." },
   { name: "Arc Lamp",     blast: 22, damage: 30, ammo: 2, color: "#8fe8ff", fx: "electric", ai: true,
-    arc: { range: 150, damage: 40 },
+    arc: { range: 130, damage: 28 },
     info: "An electric arc jumps to an enemy tank nearby." },
   { name: "Twin Splitter", blast: 30, damage: 36, ammo: 2, color: "#ff8a5a", fx: "blast",
     split: { count: 2, spread: 100, blast: 34, damage: 40 },
     info: "Splits in two at the top of its arc." },
   { name: "Seismic Slam", blast: 18, damage: 10, ammo: 2, color: "#d0b080", fx: "quake",
-    shape: "trench", quake: { range: 300, damage: 50 },
+    shape: "trench", quake: { range: 240, damage: 28 },
     info: "A shockwave runs along the ground and hurts every tank in range." },
+  // ---- elements: ice, fire, fallout and EMP ----
+  { name: "Frost Shell",  blast: 28, damage: 28, ammo: 2, color: "#9fe8ff", fx: "frost", ai: true,
+    freeze: { range: 60, turns: 1, ice: 40 },
+    info: "Freezes a nearby turret for a turn. Monsoon: freezes the mud solid." },
+  { name: "Cryo Bomb",    blast: 38, damage: 30, ammo: 1, color: "#c8f4ff", fx: "frost", ai: true,
+    speed: 0.92, freeze: { range: 110, turns: 1, ice: 70 },
+    info: "Big freeze. Locks any turret in a wide area for a turn." },
+  { name: "Napalm Shell", blast: 16, damage: 10, ammo: 2, color: "#ff7a1a", fx: "flame", ai: true,
+    flames: { count: 8, speed: 90, life: 3, dps: 6, r: 9 },
+    info: "Flames that run downhill into craters and burn for 3 seconds." },
+  { name: "Fire Bomb",    blast: 26, damage: 20, ammo: 2, color: "#ff4a2a", fx: "flame", ai: true,
+    flames: { count: 12, speed: 150, life: 3, dps: 4, r: 9 },
+    info: "Scatters lots of small flames over a wide area." },
+  { name: "Lava Glob",    blast: 30, damage: 20, ammo: 1, color: "#ff5a10", fx: "flame", shape: "bowl",
+    flames: { count: 4, speed: 40, life: 3.5, dps: 5, r: 13 },
+    info: "Digs a bowl and fills it with big, hot flames." },
+  { name: "Ember Rain",   blast: 8, damage: 6, ammo: 2, color: "#ffa040", fx: "flame", fxFrag: "flame", ai: true,
+    rain: { count: 7, spread: 100, stagger: 0.12, speed: 330, blast: 10, damage: 6, flames: { count: 1, speed: 30, life: 3, dps: 6, r: 8 } },
+    info: "Burning embers rain down and start small fires." },
+  { name: "Nuclear Warhead", blast: 60, damage: 30, ammo: 1, color: "#8aff5a", fx: "nuke", ai: true,
+    speed: 0.92, nuke: { range: 125, dmg: 5, turns: 3, confuse: 1 },
+    info: "Huge blast. Fallout hurts 3 turns and scrambles controls. Don't hit yourself!" },
+  { name: "Dirty Bomb",   blast: 24, damage: 14, ammo: 2, color: "#b4ff7a", fx: "nuke", ai: true,
+    nuke: { range: 190, dmg: 5, turns: 3, confuse: 1 },
+    info: "Small blast, wide fallout: 3 turns of damage and scrambled controls." },
+  { name: "EMP Pulse",    blast: 20, damage: 14, ammo: 2, color: "#6aa8ff", fx: "emp", ai: true,
+    emp: { range: 90, turns: 1 },
+    info: "Next turn the victim can't drive or change power." },
 ];
 
 

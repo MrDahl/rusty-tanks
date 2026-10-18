@@ -409,6 +409,114 @@ const EXPL = {
     ctx.arc(e.x, e.y, e.r * (0.4 + 2.2 * k), 0, Math.PI * 2);
     ctx.stroke();
   },
+  // icy: crystal spikes radiating out, a frosty ring and a pale blue flash
+  frost(ctx, e, k, a) {
+    ctx.globalCompositeOperation = "lighter";
+    glowAt(ctx, e.x, e.y, e.r * (0.5 + 0.9 * Math.min(1, k * 3)), [[0, rgba([255, 255, 255], a)], [0.4, rgba([150, 230, 255], a * 0.7)], [1, "rgba(60,150,255,0)"]]);
+    ctx.lineCap = "round";
+    for (let i = 0; i < 10; i++) {
+      const ang = (i * Math.PI * 2) / 10 + e.id, len = e.r * (0.5 + 1.5 * Math.min(1, k * 2.5)) * (0.7 + (i % 3) * 0.25);
+      ctx.strokeStyle = rgba(i % 2 ? [255, 255, 255] : [140, 225, 255], a * 0.9);
+      ctx.lineWidth = 2.5 * (1 - k) + 0.8;
+      ctx.beginPath();
+      ctx.moveTo(e.x, e.y);
+      ctx.lineTo(e.x + Math.cos(ang) * len, e.y + Math.sin(ang) * len);
+      // little side branches like a snowflake
+      const bx = e.x + Math.cos(ang) * len * 0.6, by = e.y + Math.sin(ang) * len * 0.6;
+      ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(ang + 0.8) * len * 0.25, by + Math.sin(ang + 0.8) * len * 0.25);
+      ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(ang - 0.8) * len * 0.25, by + Math.sin(ang - 0.8) * len * 0.25);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = rgba([200, 245, 255], a * 0.6);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 6; i++) {                    // a hexagonal frost ring
+      const ang = (i * Math.PI) / 3, rr = e.r * (0.6 + 1.6 * Math.min(1, k * 2));
+      ctx.lineTo(e.x + Math.cos(ang) * rr, e.y + Math.sin(ang) * rr);
+    }
+    ctx.stroke();
+  },
+  // fire: a hot ball with flickering tongues licking upward
+  flame(ctx, e, k, a) {
+    ctx.globalCompositeOperation = "lighter";
+    glowAt(ctx, e.x, e.y, e.r * (0.5 + 0.9 * Math.min(1, k * 3)), [[0, rgba([255, 250, 200], a)], [0.4, rgba([255, 150, 40], a * 0.85)], [1, "rgba(220,40,0,0)"]]);
+    for (let i = 0; i < 7; i++) {
+      const ang = -Math.PI / 2 + (i - 3) * 0.32, len = e.r * (0.6 + 1.6 * k) * (0.7 + 0.3 * Math.sin(e.id + i * 2.1));
+      const tx = e.x + Math.cos(ang) * len * 0.8, ty = e.y + Math.sin(ang) * len - k * e.r;
+      glowAt(ctx, tx, ty, e.r * 0.45 * (1 - k * 0.6), [[0, rgba([255, 230, 120], a * 0.9)], [1, "rgba(255,70,10,0)"]]);
+    }
+  },
+  // nuclear: blinding flash, green-white fireball, shockwaves and a mushroom cloud
+  nuke(ctx, e, k, a) {
+    ctx.globalCompositeOperation = "source-over";
+    const capY = e.y - e.r * (0.5 + 1.8 * k), capR = e.r * (0.55 + 0.6 * k);
+    ctx.fillStyle = rgba([40, 70, 40], a * 0.5);
+    ctx.beginPath();
+    ctx.moveTo(e.x - e.r * 0.22, e.y);
+    ctx.lineTo(e.x - e.r * 0.14, capY);
+    ctx.lineTo(e.x + e.r * 0.14, capY);
+    ctx.lineTo(e.x + e.r * 0.22, e.y);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(e.x, capY, capR, capR * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = "lighter";
+    if (k < 0.25) glowAt(ctx, e.x, e.y, 480, [[0, rgba([255, 255, 255], (1 - k * 4) * 0.85)], [1, "rgba(200,255,200,0)"]]);   // the flash
+    glowAt(ctx, e.x, e.y, e.r * (0.5 + 1.0 * Math.min(1, k * 3)), [[0, rgba([255, 255, 240], a)], [0.35, rgba([190, 255, 110], a * 0.9)], [0.75, rgba([60, 200, 60], a * 0.5)], [1, "rgba(0,120,0,0)"]]);
+    for (let i = 0; i < 2; i++) {
+      const p = Math.max(0, Math.min(1, (k - i * 0.15) * 2));
+      ctx.strokeStyle = rgba(i ? [140, 255, 120] : [255, 255, 255], (1 - p) * 0.85);
+      ctx.lineWidth = 4 * (1 - p) + 1;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r * (0.5 + 2.2 * p), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  },
+  // the fallout zone: a pulsing green ring with the radiation symbol in the middle
+  fallout(ctx, e, k, a) {
+    ctx.globalCompositeOperation = "lighter";
+    const pulse = 0.65 + 0.35 * Math.sin(e.t * 14);
+    glowAt(ctx, e.x, e.y, e.r, [[0, rgba([120, 255, 90], a * 0.05)], [0.8, rgba([90, 255, 70], a * 0.14 * pulse)], [1, "rgba(60,255,60,0)"]]);
+    ctx.strokeStyle = rgba([140, 255, 100], a * 0.9);
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r * Math.min(1, 0.3 + k * 4), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = rgba([150, 255, 100], a * 0.8);
+    const s = Math.min(e.r * 0.4, 34);
+    for (let i = 0; i < 3; i++) {                     // the three blades of the trefoil
+      const a0 = (i * Math.PI * 2) / 3 - Math.PI / 2 - 0.5;
+      ctx.beginPath();
+      ctx.moveTo(e.x, e.y);
+      ctx.arc(e.x, e.y, s, a0, a0 + 1.0);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(e.x, e.y, s * 0.18, 0, Math.PI * 2); ctx.fill();
+  },
+  // EMP: square-ish blue pulses with crackling arcs
+  emp(ctx, e, k, a) {
+    ctx.globalCompositeOperation = "lighter";
+    glowAt(ctx, e.x, e.y, e.r * (0.4 + 0.8 * Math.min(1, k * 3)), [[0, rgba([255, 255, 255], a)], [0.4, rgba([110, 170, 255], a * 0.8)], [1, "rgba(40,80,255,0)"]]);
+    for (let i = 0; i < 3; i++) {
+      const p = k * 1.8 - i * 0.2;
+      if (p < 0 || p > 1) continue;
+      const rr = e.r * (0.4 + 2.2 * p);
+      ctx.strokeStyle = rgba([130, 190, 255], (1 - p) * 0.9);
+      ctx.lineWidth = 3;
+      ctx.strokeRect(e.x - rr, e.y - rr, rr * 2, rr * 2);
+    }
+    let seed = e.id * 7919;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    ctx.strokeStyle = rgba([200, 230, 255], a);
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) {
+      const ang = rnd() * Math.PI * 2;
+      zigzag(ctx, e.x, e.y, e.x + Math.cos(ang) * e.r * 1.8 * (0.5 + k), e.y + Math.sin(ang) * e.r * 1.8 * (0.5 + k), rnd, 14);
+    }
+  },
   // a shockwave running along the ground to both sides
   quake(ctx, e, k, a, game) {
     const c = rgbOf(e.color, 0.45);
@@ -693,6 +801,13 @@ const FX = {
   update(dt, game) {
     if (game.seed !== this.seed || game.weather !== this.weather) this.reset(game.seed, game.weather);
     this.time += dt;
+    // embers rising from flames
+    for (const fl of game.flames || []) {
+      if (Math.random() < dt * 10) {
+        this.particles.push({ x: fl.x + (Math.random() - 0.5) * fl.r, y: fl.y - 4, vx: (Math.random() - 0.5) * 20, vy: -30 - Math.random() * 50, grav: -20, drag: 0.8,
+                              life: 0.5 + Math.random() * 0.6, max: 1.1, size: 2, color: Math.random() < 0.5 ? "#ffc060" : "#ff7a2a", glow: true });
+      }
+    }
 
     // new explosions -> sparks, debris and shake (and lightning for real bolts)
     for (const e of game.explosions) {
@@ -813,7 +928,8 @@ const FX = {
     const style = e.kind === "bolt" ? "bolt" : e.kind === "meteor" ? "meteor" : e.kind === "arc" ? "arc" : e.kind === "quake" ? "quake"
       : (e.style || (e.kind === "dirt" ? "dust" : "blast"));
     const SHAKE = { blast: Math.min(9, r / 8), mega: 12, pop: 2, spark: 3, flare: 1.5, pulse: 2, ring: 4, dust: 2, splat: 2, dig: 3,
-                    shape: 4, electric: 3, firework: 3, slag: 3, gale: 3, quake: 10, bolt: 5, meteor: 9, arc: 3 };
+                    shape: 4, electric: 3, firework: 3, slag: 3, gale: 3, quake: 10, bolt: 5, meteor: 9, arc: 3,
+                    frost: 3, flame: 2, nuke: 14, fallout: 0, emp: 2 };
     this.shake = Math.max(this.shake, SHAKE[style] !== undefined ? SHAKE[style] : 2);
     const add = (p) => this.particles.push(p);
     const rnd = Math.random;
@@ -939,6 +1055,36 @@ const FX = {
         }
         rocks(n(10, 40, 0.1), 100);
         break;
+      case "frost": // ice shards that tinkle down
+        for (let i = 0; i < 26; i++) {
+          const a = rnd() * Math.PI * 2, sp = 60 + rnd() * (120 + r * 2);
+          add({ x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 60, grav: 380, drag: 0.7, life: 0.6 + rnd() * 0.7, max: 1.3,
+                size: rnd() < 0.4 ? 3 : 2, color: rnd() < 0.5 ? "#ffffff" : "#8fe0ff", glow: true });
+        }
+        smoke(3, "#cfeeff");
+        break;
+      case "flame": // embers floating up
+        for (let i = 0; i < 24; i++) {
+          const a = -Math.PI * (0.1 + rnd() * 0.8), sp = 40 + rnd() * 160;
+          add({ x: e.x + (rnd() - 0.5) * r, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, grav: -60, drag: 1.0, life: 0.7 + rnd() * 0.8, max: 1.5,
+                size: rnd() < 0.3 ? 3 : 2, color: ["#ffe08a", "#ffb040", "#ff7a2a", "#ff4a1a"][Math.floor(rnd() * 4)], glow: true });
+        }
+        smoke(3, "#3a2a2a");
+        break;
+      case "nuke":
+        burst(n(40, 100, 1.1), 80, 200 + r * 3, { up: 40, color: ["#ffffff", "#d8ff9a", "#8aff5a", "#3ac83a"][Math.floor(rnd() * 4)] });
+        smoke(Math.max(5, Math.round(r / 8)), "#3a5a3a");
+        rocks(n(10, 50, 0.7), 120);
+        break;
+      case "fallout": // green motes drifting up from the contaminated ground
+        for (let i = 0; i < 24; i++) {
+          add({ x: e.x + (rnd() - 0.5) * r * 1.6, y: e.y + (rnd() - 0.2) * r * 0.5, vx: (rnd() - 0.5) * 16, vy: -14 - rnd() * 36, grav: 0, drag: 0.2,
+                life: 0.8 + rnd() * 0.8, max: 1.6, size: 2, color: rnd() < 0.5 ? "#9aff6a" : "#d8ffb0", glow: true });
+        }
+        break;
+      case "emp":
+        burst(16, 90, 280, { life: 0.2 + rnd() * 0.3, color: rnd() < 0.5 ? "#ffffff" : "#7fb0ff" });
+        break;
       case "meteor": // fireball, like the classic blast but bigger
       default: {   // "blast"
         const fireColors = ["#ffffff", "#fff2a0", "#ffd23a", "#ff9a2a", "#ff5a1f"];
@@ -1012,6 +1158,32 @@ const FX = {
   },
 
   // Shells are glowing comets with a fading tail
+  // Burning blobs (Napalm and friends)
+  drawFlames(ctx, flames) {
+    if (!flames.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const f of flames) {
+      const fade = Math.min(1, f.life / 0.6);
+      const flick = 0.8 + 0.25 * Math.sin(this.time * 22 + f.seed * 5) + 0.1 * Math.sin(this.time * 37 + f.seed);
+      const r = f.r * flick * (0.5 + 0.5 * fade);
+      glowAt(ctx, f.x, f.y - r * 0.5, r * 1.9, [[0, rgba([255, 240, 170], 0.55 * fade)], [0.5, rgba([255, 120, 30], 0.4 * fade)], [1, "rgba(220,40,0,0)"]]);
+      // a tongue of flame
+      ctx.fillStyle = rgba([255, 200, 80], 0.8 * fade);
+      ctx.beginPath();
+      ctx.moveTo(f.x - r * 0.6, f.y);
+      ctx.quadraticCurveTo(f.x - r * 0.4, f.y - r * 1.4, f.x + Math.sin(this.time * 18 + f.seed) * r * 0.4, f.y - r * (1.8 + 0.5 * flick));
+      ctx.quadraticCurveTo(f.x + r * 0.4, f.y - r * 1.2, f.x + r * 0.6, f.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = rgba([255, 250, 220], 0.8 * fade);
+      ctx.beginPath();
+      ctx.ellipse(f.x, f.y - r * 0.4, r * 0.28, r * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  },
+
   drawShells(ctx, projs) {
     for (const p of projs) {
       if (p.delay > 0) continue;
