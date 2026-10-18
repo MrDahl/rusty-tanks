@@ -163,14 +163,87 @@
     #seasonRow { gap: 6px; max-width: 880px; }
     #seasonRow button.choice { min-width: 0; padding: clamp(4px, 1vw, 7px) clamp(7px, 1.3vw, 11px); font-size: clamp(7px, 1.35vw, 10px); }
     #seasonInfo { margin: 8px 0 0; min-height: 1.3em; color: #9fc4ea; }
+
+    /* ---- Fullscreen layout ----
+       The whole game (battlefield + control panel + menus) is one 960 x 650 frame that is scaled
+       to fit the window. No scrolling, nothing under the battlefield. */
+    html, body { height: 100%; overflow: hidden; }
+    body { display: block; min-height: 0; }
+    #game {
+      position: absolute; left: 50%; top: 50%; width: 960px; height: 650px;
+      transform: translate(-50%, -50%) scale(var(--scale, 1));
+      transform-origin: center center;
+      background: #060a1a; border-radius: 6px; overflow: hidden;
+      box-shadow: 0 0 22px #35f2ff44, 0 0 60px #ff3df022;
+    }
+    #stage { position: absolute; left: 0; top: 0; width: 960px; height: 540px; }
+    #screen { position: absolute; inset: 0; width: 960px; height: 540px; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none; }
+    #stage.crt::after { border-radius: 0; }
+    #controls {
+      position: absolute; left: 0; top: 540px; width: 960px; height: 110px; box-sizing: border-box;
+      display: flex; flex-direction: column; justify-content: center; gap: 9px; padding: 0 14px;
+      border: 0; border-top: 3px solid #27457a; border-radius: 0; box-shadow: inset 0 8px 18px #35f2ff12;
+      background: linear-gradient(180deg, #101a40, #080d26);
+    }
+    .crow { display: flex; align-items: center; gap: 14px; }
+    .crow label { gap: 6px; white-space: nowrap; }
+    .crow .spacer { flex: 1; }
+    #controls input[type="range"] { width: 120px; }
+    #controls .slider { flex: 0 0 auto; }
+    #controls .value { min-width: 4ch; }
+    #controls .wsel { flex: 1; min-width: 0; }
+    #controls select { flex: 1; min-width: 0; font-size: 10px; padding: 7px 5px; }
+    #controls button { padding: 7px 12px; font-size: 10px; }
+    #fire { padding: 10px 26px; font-size: 14px; background: #ff3df0; color: #fff; box-shadow: 0 0 12px #ff3df0aa; }
+    #fire:disabled { background: #2b3a60; box-shadow: none; }
+    #menu { position: absolute; inset: 0; border-radius: 0; z-index: 5; background: rgba(4, 6, 20, 0.88); }
+    #menu .panel { padding: 8px 18px; }
+    .panel .keys { margin: 14px 0 0; color: #7f9cc4; font-family: "Courier New", monospace; font-size: 12px; line-height: 1.5; }
+    /* Weapon draft: fills the game frame */
+    #draft {
+      position: absolute; inset: 0; width: auto; z-index: 6; border: 0; border-radius: 0; box-shadow: none;
+      padding: 10px 16px 10px; display: flex; flex-direction: column; background: #0a1030; overflow: hidden;
+    }
+    #draft.hidden { display: none; }
+    #draft h2 { font-size: 20px; margin: 0 0 4px; }
+    #draftNote { margin: 0 0 3px; font-size: 12px; }
+    #draftTurn { margin: 0 0 6px; font-size: 11px; min-height: 1.2em; }
+    #picks { gap: 8px; margin-bottom: 8px; }
+    .pickbox { padding: 4px 8px; }
+    .pickbox h3 { margin: 0 0 2px; font-size: 11px; }
+    .pickbox ol { columns: 2; column-gap: 12px; font-size: 12px; line-height: 1.35; padding-left: 26px; }
+    #weaponGrid { grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; flex: 1; align-content: start; }
+    button.wcard { padding: 4px 6px; }
+    button.wcard b { font-size: 9px; margin-bottom: 3px; }
+    button.wcard span { font-size: 11px; line-height: 1.2; }
+    #draft > .row { margin-top: auto; }
+    #draft > .row button { padding: 7px 16px; }
   </style>
 </head>
 <body>
-  <h1>Rusty Tanks</h1>
-
-  <div id="stage">
-    <canvas id="screen"></canvas>
-
+  <div id="game">
+    <div id="stage">
+      <canvas id="screen"></canvas>
+    </div>
+    <div id="controls">
+      <div class="crow">
+        <label class="slider">Angle <input id="angle" type="range" min="0" max="180" step="1" value="55"> <span class="value" id="angleLabel">55&deg;</span></label>
+        <label class="slider">Power <input id="power" type="range" min="5" max="100" step="1" value="60"> <span class="value" id="powerLabel">60</span></label>
+        <label class="wsel">Weapon <select id="weapon"></select></label>
+        <button id="fire">FIRE!</button>
+      </div>
+      <div class="crow">
+        <label>Drive <button id="driveL" class="secondary" title="Hold to drive left (A)">&#9664;</button><button id="driveR" class="secondary" title="Hold to drive right (D)">&#9654;</button></label>
+        <label><input id="guide" type="checkbox" checked> Aim guide</label>
+        <label id="fxlabel"><input id="fx" type="checkbox" checked> Retro FX</label>
+        <label><input id="sfx" type="checkbox" checked> Sound</label>
+        <label><input id="music" type="checkbox" checked> Music</label>
+        <span class="spacer"></span>
+        <button id="newgame" class="secondary">New Game</button>
+        <button id="menubtn" class="secondary">Menu</button>
+        <button id="fullscreen" class="secondary" title="Fullscreen (F)">&#9974;</button>
+      </div>
+    </div>
     <div id="menu">
       <div class="panel">
         <h2>Rusty Tanks</h2>
@@ -204,41 +277,26 @@
         <p class="tag" id="seasonInfo">Clear skies. No surprises.</p>
 
         <button id="start" class="start">START</button>
+        <p class="keys">Keys: &larr; &rarr; angle &nbsp; &uarr; &darr; power (Shift = big steps) &nbsp; A / D drive &nbsp; 1-9 weapon &nbsp; Space fire<br>N rematch &nbsp; M music &nbsp; F fullscreen &nbsp; Esc menu &nbsp; (click once to switch the sound on)</p>
+      </div>
+    </div>
+
+    <div id="draft" class="hidden">
+      <h2>Choose your weapons</h2>
+      <p id="draftNote">A new pool of 20 weapons every game. Once a weapon is picked, it is gone for both players.</p>
+      <p id="draftTurn"></p>
+      <div id="picks">
+        <div class="pickbox" id="pickbox0"><h3 id="pickname0"></h3><ol id="picklist0"></ol></div>
+        <div class="pickbox" id="pickbox1"><h3 id="pickname1"></h3><ol id="picklist1"></ol></div>
+      </div>
+      <div id="weaponGrid"></div>
+      <div class="row">
+        <button id="draftBack" class="secondary">Back</button>
+        <button id="draftRandom" class="secondary">Random pick</button>
+        <button id="draftGo" disabled>START BATTLE</button>
       </div>
     </div>
   </div>
-
-  <div id="draft" class="hidden">
-    <h2>Choose your weapons</h2>
-    <p id="draftNote">A new pool of 20 weapons every game. Once a weapon is picked, it is gone for both players.</p>
-    <p id="draftTurn"></p>
-    <div id="picks">
-      <div class="pickbox" id="pickbox0"><h3 id="pickname0"></h3><ol id="picklist0"></ol></div>
-      <div class="pickbox" id="pickbox1"><h3 id="pickname1"></h3><ol id="picklist1"></ol></div>
-    </div>
-    <div id="weaponGrid"></div>
-    <div class="row">
-      <button id="draftBack" class="secondary">Back</button>
-      <button id="draftRandom" class="secondary">Random pick</button>
-      <button id="draftGo" disabled>START BATTLE</button>
-    </div>
-  </div>
-
-  <div id="controls">
-    <label>Angle <input id="angle" type="range" min="0" max="180" step="1" value="55"> <span class="value" id="angleLabel">55&deg;</span></label>
-    <label>Power <input id="power" type="range" min="5" max="100" step="1" value="60"> <span class="value" id="powerLabel">60</span></label>
-    <label>Drive <button id="driveL" class="secondary" title="Hold to drive left (A)">&#9664;</button><button id="driveR" class="secondary" title="Hold to drive right (D)">&#9654;</button></label>
-    <label>Weapon <select id="weapon"></select></label>
-    <button id="fire">FIRE!</button>
-    <label><input id="guide" type="checkbox" checked> Aim guide</label>
-    <label id="fxlabel"><input id="fx" type="checkbox" checked> Retro FX</label>
-    <label><input id="sfx" type="checkbox" checked> Sound</label>
-    <label><input id="music" type="checkbox" checked> Music (M)</label>
-    <button id="newgame" class="secondary">New Game</button>
-    <button id="menubtn" class="secondary">Menu</button>
-  </div>
-
-  <p id="help">Two players take turns on one screen. Keys: &larr; &rarr; angle, &uarr; &darr; power (hold Shift for big steps), A / D = drive (limited each turn), 1-9 = choose weapon, Space = fire, N = rematch, M = music on/off, Esc = menu. Click anywhere once to switch the sound on.</p>
 
   <script src="weapons.js"></script>
   <script src="game.js"></script>

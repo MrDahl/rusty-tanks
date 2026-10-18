@@ -400,7 +400,6 @@ const POOL_SIZE = PICKS_EACH * 2;
 const draftSection = document.getElementById("draft");
 const stageEl = document.getElementById("stage");
 const controlsEl = document.getElementById("controls");
-const helpEl = document.getElementById("help");
 const draftGo = document.getElementById("draftGo");
 const draft = { picks: [[], []], pool: [], token: 0 };
 let draftOpen = false;
@@ -513,9 +512,6 @@ function openDraft() {
   draft.pool = makePool();
   draft.token++;
   draftOpen = true;
-  stageEl.style.display = "none";
-  controlsEl.style.display = "none";
-  helpEl.style.display = "none";
   draftSection.classList.remove("hidden");
   buildWeaponGrid();
   renderDraft();
@@ -526,9 +522,6 @@ function closeDraft() {
   draftOpen = false;
   draft.token++;
   draftSection.classList.add("hidden");
-  stageEl.style.display = "";
-  controlsEl.style.display = "";
-  helpEl.style.display = "";
 }
 
 document.getElementById("draftBack").addEventListener("click", () => {
@@ -618,6 +611,25 @@ function applyFx() {
 try { if (localStorage.getItem("rustyTanksFx") === "0") fxBox.checked = false; } catch (e) { /* default: on */ }
 fxBox.addEventListener("change", applyFx);
 applyFx();
+
+// ---- Fullscreen layout: scale the 960 x 650 game frame to fit the window ----
+const gameFrame = document.getElementById("game");
+function fitGame() {
+  const s = Math.min(window.innerWidth / 960, window.innerHeight / 650);
+  gameFrame.style.setProperty("--scale", s.toFixed(4));
+}
+window.addEventListener("resize", fitGame);
+fitGame();
+function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen();
+  } catch (e) { /* not supported */ }
+}
+document.getElementById("fullscreen").addEventListener("click", toggleFullscreen);
+window.addEventListener("keydown", (e) => {
+  if ((e.key === "f" || e.key === "F") && !e.ctrlKey && !e.metaKey) toggleFullscreen();
+});
 
 // Sound and music switches (remembered between visits)
 const sfxBox = document.getElementById("sfx");

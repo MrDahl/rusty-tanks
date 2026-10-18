@@ -28,7 +28,9 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 
 - Sound: every sound is synthesized live in the browser (no sound files). Every weapon has its own launch sound, and each of the 16 explosion styles has its own boom. The music is a chiptune in the style of old keygen tracks (fast arpeggios, bouncy bass, pulse lead, noise drums): a calmer track for the menus and a faster one for the battle. Click anywhere once to switch sound on; the Sound and Music boxes (or the M key) turn them off again.
 
-Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = drive, 1-9 = choose weapon, Space = fire, N = rematch (same weapons), M = music on/off, Esc = menu.
+- The game fills the whole window (no scrolling): the battlefield and the control panel (angle, power, weapon, FIRE, drive, switches) are one screen that scales to fit. Press F or the fullscreen button for true fullscreen.
+
+Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = drive, 1-9 = choose weapon, Space = fire, N = rematch (same weapons), M = music on/off, F = fullscreen, Esc = menu.
 
 ## Files
 - `index.html`: page layout and styling
