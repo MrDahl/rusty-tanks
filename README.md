@@ -8,7 +8,7 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 
 ## How to play
 - Pick 1 Player (vs the computer: Easy, Normal or Hard) or 2 Players on one screen from the main menu.
-- Then draft your weapons: players take turns picking 10 weapons each from a fresh random pool of 20 weapons (out of 52). A weapon that has been picked is gone for both players, and every new game reshuffles the pool. Each pick is one use in the battle.
+- Press **Draft Battle** to draft your weapons, or **Quick Play** to start at once with 10 random weapons each. In the draft: players take turns picking 10 weapons each from a fresh random pool of 20 weapons (out of 52). A weapon that has been picked is gone for both players, and every new game reshuffles the pool. Each pick is one use in the battle.
 - Loose dirt falls: overhangs and tunnel roofs collapse after every shot.
 - Each turn: optionally drive a little (60 px per turn), set angle and power, choose a weapon and fire. Watch the wind.
 - Hits earn points, hitting yourself loses points. Each player gets 10 shots.
@@ -30,7 +30,7 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 
 - The game fills the whole window (no scrolling): the battlefield and the control panel (angle, power, weapon, FIRE, drive, switches) are one screen that scales to fit. Press F or the fullscreen button for true fullscreen.
 
-Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = drive, 1-9 = choose weapon, Space = fire, N = rematch (same weapons), M = music on/off, F = fullscreen, Esc = menu.
+Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = drive, 1-9 and 0 = choose weapon 1-10, Space = fire, N or the Rematch button = new map, same weapons, M = music on/off, F = fullscreen, Esc = menu.
 
 ## Files
 - `index.html`: page layout and styling
@@ -39,3 +39,6 @@ Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = dr
 - `fx.js`: the neon arcade effects (night city, rain, lightning, sparks, glowing shells, screen shake)
 - `sound.js`: synthesized sound effects and chiptune music (Web Audio)
 - `main.js`: drawing, menus, weapon draft and controls
+
+## Tests
+`node tests/run.js` runs the automatic checks (weapons, falling dirt, seasons, buried tanks, computer opponent). Run it after changing `game.js` or `weapons.js`.

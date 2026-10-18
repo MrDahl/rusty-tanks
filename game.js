@@ -1313,14 +1313,35 @@ class Game {
       if (miss < best.miss) best = { angle, power, miss };
     };
 
-    // Coarse sweep, then a fine search around the best result
-    const powerStep = coarse;
-    for (let angle = 5; angle <= 175; angle += coarse) {
-      for (let power = 15; power <= 100; power += powerStep) tryShot(angle, power);
+    // Three passes, each narrower than the last (about 3x cheaper than one fine sweep):
+    //  1. a coarse sweep of every angle and power, remembering the few best spots
+    //  2. a finer search around each of those spots
+    //  3. the finest search around the winner
+    const found = [];
+    const step1 = coarse * 2;
+    for (let angle = 5; angle <= 175; angle += step1) {
+      for (let power = 15; power <= 100; power += step1) {
+        const miss = score(angle, power);
+        found.push({ angle, power, miss });
+        if (miss < best.miss) best = { angle, power, miss };
+      }
+    }
+    found.sort((a, b) => a.miss - b.miss);
+    const seeds = [];
+    for (const f of found) {              // the best few spots that are not right next to each other
+      if (seeds.length >= 4) break;
+      if (seeds.every((s) => Math.abs(s.angle - f.angle) > step1 || Math.abs(s.power - f.power) > step1)) seeds.push(f);
+    }
+    for (const sd of seeds) {
+      for (let angle = sd.angle - step1; angle <= sd.angle + step1; angle += 1) {
+        for (let power = sd.power - step1; power <= sd.power + step1; power += 1) {
+          if (angle >= 0 && angle <= 180 && power >= 5 && power <= 100) tryShot(angle, power);
+        }
+      }
     }
     const a0 = best.angle, p0 = best.power;
-    for (let angle = a0 - coarse; angle <= a0 + coarse; angle += 0.5) {
-      for (let power = p0 - coarse; power <= p0 + coarse; power += 0.5) {
+    for (let angle = a0 - 1; angle <= a0 + 1; angle += 0.5) {
+      for (let power = p0 - 1; power <= p0 + 1; power += 0.5) {
         if (angle >= 0 && angle <= 180 && power >= 5 && power <= 100) tryShot(angle, power);
       }
     }

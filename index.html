@@ -198,6 +198,8 @@
     #fire:disabled { background: #2b3a60; box-shadow: none; }
     #menu { position: absolute; inset: 0; border-radius: 0; z-index: 5; background: rgba(4, 6, 20, 0.88); }
     #menu .panel { padding: 8px 18px; }
+    button.quick { background: #ff3df0; color: #fff; box-shadow: 0 0 12px #ff3df0aa; }
+    #startInfo { margin: 8px 0 0; font-size: 12px; }
     .panel .keys { margin: 14px 0 0; color: #7f9cc4; font-family: "Courier New", monospace; font-size: 12px; line-height: 1.5; }
     /* Weapon draft: fills the game frame */
     #draft {
@@ -239,7 +241,7 @@
         <label><input id="sfx" type="checkbox" checked> Sound</label>
         <label><input id="music" type="checkbox" checked> Music</label>
         <span class="spacer"></span>
-        <button id="newgame" class="secondary">New Game</button>
+        <button id="newgame" class="secondary" title="Same weapons, new map (N)">Rematch</button>
         <button id="menubtn" class="secondary">Menu</button>
         <button id="fullscreen" class="secondary" title="Fullscreen (F)">&#9974;</button>
       </div>
@@ -276,8 +278,9 @@
         </div>
         <p class="tag" id="seasonInfo">Clear skies. No surprises.</p>
 
-        <button id="start" class="start">START</button>
-        <p class="keys">Keys: &larr; &rarr; angle &nbsp; &uarr; &darr; power (Shift = big steps) &nbsp; A / D drive &nbsp; 1-9 weapon &nbsp; Space fire<br>N rematch &nbsp; M music &nbsp; F fullscreen &nbsp; Esc menu &nbsp; (click once to switch the sound on)</p>
+        <div class="row"><button id="start" class="start">DRAFT BATTLE</button><button id="quick" class="start quick">QUICK PLAY</button></div>
+        <p class="tag" id="startInfo">Draft: take turns picking 10 weapons from a pool of 20. Quick Play: random weapons, shoot right away.</p>
+        <p class="keys">Keys: &larr; &rarr; angle &nbsp; &uarr; &darr; power (Shift = big steps) &nbsp; A / D drive &nbsp; 1-9 / 0 weapon &nbsp; Space fire<br>N rematch &nbsp; M music &nbsp; F fullscreen &nbsp; Esc menu &nbsp; (click once to switch the sound on)</p>
       </div>
     </div>
 

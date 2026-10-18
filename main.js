@@ -240,9 +240,16 @@ const SEASON_INFO = {
   random: "A surprise season, picked fresh for every match.",
 };
 
-function shortName(i) {
-  if (!game.ai[i]) return "P" + (i + 1);
-  return "CPU-" + game.ai[i].toUpperCase();
+function shortName(i, ai) {
+  ai = ai || game.ai;
+  if (!ai[i]) return "P" + (i + 1);
+  return "CPU-" + ai[i].toUpperCase();
+}
+
+// The dotted aim guide is a plain flight path. Weapons that do something clever on the way are only approximate.
+function guideIsApproximate(w) {
+  return !!(w.homing || w.proximity || w.split || w.bounces || w.rain || w.burst || w.scatter || w.chaos || w.rolls ||
+    w.drill || w.teleport || (w.volley && w.volley.count > 1));
 }
 
 function drawHud() {
@@ -293,6 +300,7 @@ function drawHud() {
     if (!game.isAiTurn) neonText("DRIVE LEFT " + Math.round(game.moveLeft) + "  (A / D)", W / 2, 114, COLORS.textDim, 8, "center");
     if (game.tank.buried) neonText("BURIED IN DIRT - BLAST YOURSELF FREE", W / 2, 130, "#ffb060", 8, "center");
     else if (game.tank.sink > 0) neonText("STUCK IN THE MUD - DRIVE TO GET FREE", W / 2, 130, SEASON_COLORS.monsoon, 8, "center");
+    else if (!game.isAiTurn && guideBox.checked && guideIsApproximate(wp)) neonText("AIM GUIDE: FIRST SHELL, ROUGH PATH ONLY", W / 2, 130, COLORS.textDim, 8, "center");
   } else if (game.lastHit && game.phase !== "over") {
     neonText(game.lastHit.toUpperCase(), W / 2, 76, NEON.amber, 13, "center");
   }
@@ -481,7 +489,7 @@ function renderDraft() {
     b.classList.toggle("taken", owner >= 0);
     b.classList.toggle("t0", owner === 0);
     b.classList.toggle("t1", owner === 1);
-    b.lastChild.textContent = owner >= 0 ? "TAKEN BY " + shortName(owner) : "";
+    b.lastChild.textContent = owner >= 0 ? "TAKEN BY " + shortName(owner, aiSetting()) : "";
   }
   document.getElementById("draftRandom").disabled = !humanTurn;
   draftGo.disabled = !draftDone();
@@ -546,6 +554,21 @@ draftGo.addEventListener("click", () => {
 });
 
 startButton.addEventListener("click", startGame);
+
+// Quick Play: no draft. Both sides get 10 random weapons from a fresh pool (the computer-friendly ones are more likely)
+document.getElementById("quick").addEventListener("click", () => {
+  menu.classList.add("hidden");
+  draft.pool = makePool();
+  draft.picks = [[], []];
+  while (!draftDone()) {
+    const who = drafter();
+    const avail = availableWeapons();
+    draft.picks[who].push(aiDraftPick(avail, Math.random));
+  }
+  currentLoadouts = [draft.picks[0].slice(), draft.picks[1].slice()];
+  game.newMatch(Date.now(), aiSetting(), [currentLoadouts[0].slice(), currentLoadouts[1].slice()], settings.season);
+  menuOpen = false;
+});
 menuButton.addEventListener("click", showMenu);
 
 // ---- Controls ---------------------------------------------------------
@@ -677,9 +700,9 @@ window.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowDown") game.setPower(game.tank.power - big);
   else if (e.key === "a" || e.key === "A") game.setMoveDir(-1);
   else if (e.key === "d" || e.key === "D") game.setMoveDir(1);
-  else if (e.key >= "1" && e.key <= "9") {
+  else if (e.key >= "0" && e.key <= "9") {
     const owned = ownedWeapons();
-    const n = Number(e.key) - 1;
+    const n = e.key === "0" ? 9 : Number(e.key) - 1;       // 1-9 = weapons 1-9, 0 = weapon 10
     if (n < owned.length) game.setWeapon(owned[n]);
   }
   else if (e.key === " " || e.key === "Enter") {
