@@ -1,0 +1,13 @@
+{
+  "name": "Rusty Tanks",
+  "short_name": "Rusty Tanks",
+  "description": "A neon artillery game. Aim, fire, mind the wind.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#060a1a",
+  "theme_color": "#060a1a",
+  "icons": [{ "src": "assets/tanks_logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

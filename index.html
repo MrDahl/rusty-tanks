@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#060a1a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -237,6 +242,119 @@
     #statsTable tr.big td { font-size: 20px; padding: 6px 10px; }
     #statsTable td small { display: block; color: #7f9cc4; font-size: 11px; }
     #stats .row { margin-top: 14px; }
+
+    /* ---- Phones and tablets (touch) ----
+       The battlefield fills the screen and the controls float on top of it as big touch buttons.
+       Turned on by a touch screen, or with ?mobile=1 in the address (?mobile=0 turns it off). */
+    .mobileonly { display: none; }
+    #touch, #gear { display: none; }
+    #mid { display: contents; }
+    .crow .opts { display: contents; }
+    body.mobile { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+    body.mobile .mobileonly { display: block; }
+    body.mobile .desktoponly { display: none; }
+    body.mobile #game { position: fixed; inset: 0; left: 0; top: 0; width: 100%; height: 100%; transform: none; border-radius: 0; box-shadow: none; }
+    body.mobile #stage { left: 50%; top: 50%; transform: translate(-50%, -50%) scale(var(--ms, 1)); transform-origin: center center; }
+    body.mobile.portrait #stage { top: 0; transform: translate(-50%, 0) scale(var(--ms, 1)); transform-origin: top center; }
+    body.mobile #controls {
+      position: fixed; inset: 0; left: 0; top: 0; width: auto; height: auto; padding: 0; display: block;
+      background: none; border: 0; box-shadow: none; pointer-events: none; z-index: 3;
+    }
+    body.mobile #controls > * { pointer-events: auto; }
+    body.mobile #controls .crow { display: contents; }
+    body.mobile #controls label.slider { display: none; }
+    body.mobile.inmenu #controls { display: none; }
+    body.mobile #controls button { box-shadow: none; }
+    /* aiming pad, bottom left */
+    body.mobile #touch { display: flex; flex-direction: column; gap: 5px; position: fixed; left: max(10px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom)); }
+    .trow { display: flex; align-items: center; gap: 3px; padding: 3px; background: rgba(8, 13, 38, 0.72); border: 2px solid #27457a; border-radius: 12px; }
+    .trow .step { width: 46px; height: 40px; padding: 0; font-size: 26px; font-weight: bold; line-height: 1; background: #12204a; color: #35f2ff; border: 2px solid #35f2ff88; border-radius: 9px; }
+    .trow .step:active { background: #35f2ff; color: #060a1a; }
+    .trow .step:disabled { opacity: 0.35; }
+    .tv { width: 62px; text-align: center; line-height: 1.15; }
+    .tv i { display: block; font-style: normal; font-size: 7px; color: #7f9cc4; letter-spacing: 1px; }
+    .tv b { font-size: 14px; color: #35f2ff; text-shadow: 0 0 6px #35f2ff88; }
+    body.mobile #controls.locked-angle .trow:nth-child(1), body.mobile #controls.locked-power .trow:nth-child(2) { opacity: 0.45; }
+    /* fire and drive, bottom right */
+    body.mobile #fire {
+      position: fixed; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom));
+      width: 88px; height: 88px; padding: 0; border-radius: 50%; font-size: 14px; border: 3px solid #fff4;
+    }
+    body.mobile #fire:active:not(:disabled) { transform: scale(0.94); }
+    body.mobile label.drive {
+      position: fixed; right: calc(max(12px, env(safe-area-inset-right)) + 100px); bottom: max(12px, env(safe-area-inset-bottom));
+      display: flex; gap: 6px; font-size: 0;
+    }
+    body.mobile label.drive button { width: 54px; height: 54px; padding: 0; font-size: 20px; border-radius: 12px; opacity: 0.92; }
+    /* weapon and settings, bottom centre */
+    body.mobile #mid {
+      display: flex; gap: 6px; align-items: center; justify-content: center; position: fixed; bottom: max(10px, env(safe-area-inset-bottom));
+      left: calc(max(10px, env(safe-area-inset-left)) + 184px); right: calc(max(12px, env(safe-area-inset-right)) + 238px);
+    }
+    body.mobile #mid label.wsel { flex: 1; min-width: 0; max-width: 300px; font-size: 0; display: block; }
+    body.mobile #mid select { width: 100%; height: 44px; font-size: 14px; border-radius: 10px; background: rgba(8, 13, 38, 0.85); border: 2px solid #27457a; color: #cfe8ff; padding: 0 6px; }
+    body.mobile #gear { display: block; width: 44px; height: 44px; padding: 0; font-size: 20px; border-radius: 10px; flex: none; }
+    /* settings pop-up */
+    body.mobile .opts {
+      display: none; position: fixed; left: 50%; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 54px); transform: translateX(-50%);
+      flex-wrap: wrap; gap: 10px 16px; justify-content: center; width: max-content; max-width: min(92vw, 520px); padding: 12px 14px;
+      background: rgba(8, 13, 38, 0.96); border: 2px solid #35f2ff88; border-radius: 12px; box-shadow: 0 0 24px #000a;
+    }
+    body.mobile #controls.open .opts { display: flex; }
+    body.mobile .opts label { font-size: 11px; gap: 8px; min-height: 36px; }
+    body.mobile .opts input[type="checkbox"] { width: 22px; height: 22px; accent-color: #35f2ff; }
+    body.mobile .opts .spacer { flex-basis: 100%; height: 0; }
+    body.mobile .opts button { height: 42px; padding: 0 16px; font-size: 11px; }
+    /* menu, draft and report: real pixels, scrollable */
+    body.mobile #menu, body.mobile #stats, body.mobile #draft { overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+    body.mobile #menu { align-items: flex-start; }
+    body.mobile #menu .panel { margin: auto; padding: 10px 14px max(18px, env(safe-area-inset-bottom)); }
+    body.mobile button.choice { min-height: 40px; }
+    body.mobile button.start { min-height: 46px; }
+    body.mobile #seasonRow button.choice { font-size: 10px; padding: 8px 10px; min-width: 0; }
+    body.mobile #draft { display: block; padding: 8px max(12px, env(safe-area-inset-left)) 0; }
+    body.mobile #draft.hidden { display: none; }
+    body.mobile #weaponGrid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); flex: none; }
+    body.mobile #draft > .row { position: sticky; bottom: 0; margin: 0 -12px; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); background: #0a1030; border-top: 2px solid #27457a; }
+    body.mobile #draft > .row button { min-height: 42px; }
+    body.mobile #stats { justify-content: flex-start; padding: 12px 14px max(14px, env(safe-area-inset-bottom)); }
+    body.mobile #stats h2 { margin-top: auto; }
+    body.mobile #stats .row { margin-bottom: auto; }
+    body.mobile #stats .row button { min-height: 42px; }
+    /* portrait: the battlefield sits at the top, the controls are stacked in the free space below it */
+    body.mobile.portrait #touch { flex-direction: row; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 100px); justify-content: space-between; }
+    body.mobile.portrait .trow { flex: 1; justify-content: space-between; }
+    body.mobile.portrait .trow .step { width: 42px; }
+    body.mobile.portrait .tv { width: auto; flex: 1; }
+    body.mobile.portrait label.drive { right: auto; left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); }
+    body.mobile.portrait label.drive button { width: 68px; height: 68px; font-size: 24px; }
+    body.mobile.portrait #fire { width: 100px; height: 100px; }
+    body.mobile.portrait #mid { left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 160px); }
+    body.mobile.portrait .opts { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 214px); }
+    @media (max-height: 480px) {
+      body.mobile .panel h2 { font-size: 22px; letter-spacing: 2px; }
+      body.mobile .panel .tag { margin: 0 0 6px; font-size: 12px; }
+      body.mobile .panel .sub { margin: 6px 0 4px; font-size: 10px; }
+      body.mobile .panel .row { gap: 6px; }
+      body.mobile button.choice { min-height: 36px; padding: 4px 12px; }
+      body.mobile button.start { margin-top: 8px; }
+      body.mobile #startInfo, body.mobile #seasonInfo { margin: 5px 0 0; font-size: 11px; }
+      body.mobile #startInfo { display: none; }
+      body.mobile .panel > .tag { display: none; }
+      body.mobile #menuFs { min-height: 30px; padding: 2px 12px; }
+      body.mobile .mobileonly > .tag { margin: 2px 0 0; }
+      body.mobile .panel .keys { margin-top: 8px; font-size: 11px; }
+      body.mobile #draft h2 { font-size: 15px; }
+      body.mobile #draftNote { display: none; }
+      body.mobile .pickbox ol { font-size: 11px; line-height: 1.25; }
+      body.mobile #statsTable { font-size: 12px; }
+      body.mobile #statsTable th, body.mobile #statsTable td { padding: 2px 8px; }
+      body.mobile #statsTable tr.big td { font-size: 15px; padding: 3px 8px; }
+      body.mobile #statsTable td small { font-size: 9px; }
+      body.mobile #stats h2 { font-size: 16px; }
+      body.mobile #statsWinner { font-size: 11px; margin-bottom: 6px; }
+      body.mobile #stats .row { margin-top: 8px; }
+    }
   </style>
 </head>
 <body>
@@ -248,25 +366,32 @@
       <div class="crow">
         <label class="slider">Angle <input id="angle" type="range" min="0" max="180" step="1" value="55"> <span class="value" id="angleLabel">55&deg;</span></label>
         <label class="slider">Power <input id="power" type="range" min="5" max="100" step="1" value="60"> <span class="value" id="powerLabel">60</span></label>
-        <label class="wsel">Weapon <select id="weapon"></select></label>
+        <div id="mid"><label class="wsel">Weapon <select id="weapon"></select></label><button id="gear" class="secondary" aria-label="Settings">&#9776;</button></div>
         <button id="fire">FIRE!</button>
       </div>
       <div class="crow">
-        <label>Drive <button id="driveL" class="secondary" title="Hold to drive left (A)">&#9664;</button><button id="driveR" class="secondary" title="Hold to drive right (D)">&#9654;</button></label>
-        <label><input id="guide" type="checkbox" checked> Aim guide</label>
-        <label id="fxlabel"><input id="fx" type="checkbox" checked> Retro FX</label>
-        <label><input id="sfx" type="checkbox" checked> Sound</label>
-        <label><input id="music" type="checkbox" checked> Music</label>
-        <span class="spacer"></span>
-        <button id="newgame" class="secondary" title="Same weapons, new map (N)">Rematch</button>
-        <button id="menubtn" class="secondary">Menu</button>
-        <button id="fullscreen" class="secondary" title="Fullscreen (F)">&#9974;</button>
+        <label class="drive">Drive <button id="driveL" class="secondary" title="Hold to drive left (A)">&#9664;</button><button id="driveR" class="secondary" title="Hold to drive right (D)">&#9654;</button></label>
+        <div class="opts">
+          <label><input id="guide" type="checkbox" checked> Aim guide</label>
+          <label id="fxlabel"><input id="fx" type="checkbox" checked> Retro FX</label>
+          <label><input id="sfx" type="checkbox" checked> Sound</label>
+          <label><input id="music" type="checkbox" checked> Music</label>
+          <span class="spacer"></span>
+          <button id="newgame" class="secondary" title="Same weapons, new map (N)">Rematch</button>
+          <button id="menubtn" class="secondary">Menu</button>
+          <button id="fullscreen" class="secondary" title="Fullscreen (F)">&#9974;</button>
+        </div>
+      </div>
+      <div id="touch">
+        <div class="trow"><button class="step" data-k="angle" data-d="-1">&minus;</button><span class="tv"><i>ANGLE</i><b id="tAngle">55&deg;</b></span><button class="step" data-k="angle" data-d="1">+</button></div>
+        <div class="trow"><button class="step" data-k="power" data-d="-1">&minus;</button><span class="tv"><i>POWER</i><b id="tPower">60</b></span><button class="step" data-k="power" data-d="1">+</button></div>
       </div>
     </div>
     <div id="menu">
       <div class="panel">
         <h2>Rusty Tanks</h2>
         <p class="tag">Aim. Fire. Mind the wind.</p>
+        <div class="mobileonly"><button id="menuFs" class="choice">&#9974; Go fullscreen</button><p class="tag" id="fsHint"></p></div>
 
         <p class="sub">Game mode</p>
         <div class="row" id="modeRow">
@@ -297,7 +422,8 @@
 
         <div class="row"><button id="start" class="start">DRAFT BATTLE</button><button id="quick" class="start quick">QUICK PLAY</button></div>
         <p class="tag" id="startInfo">Draft: take turns picking 10 weapons from a pool of 20. Quick Play: random weapons, shoot right away.</p>
-        <p class="keys">Keys: &larr; &rarr; angle &nbsp; &uarr; &darr; power (Shift = big steps) &nbsp; A / D drive &nbsp; 1-9 / 0 weapon &nbsp; Space fire<br>N rematch &nbsp; M music &nbsp; F fullscreen &nbsp; Esc menu &nbsp; (click once to switch the sound on)</p>
+        <p class="keys mobileonly">Touch: hold &minus; / + to aim, or <b>drag on the battlefield</b> (sideways = angle, up/down = power). Hold &#9664; &#9654; to drive.</p>
+        <p class="keys desktoponly">Keys: &larr; &rarr; angle &nbsp; &uarr; &darr; power (Shift = big steps) &nbsp; A / D drive &nbsp; 1-9 / 0 weapon &nbsp; Space fire<br>N rematch &nbsp; M music &nbsp; F fullscreen &nbsp; Esc menu &nbsp; (click once to switch the sound on)</p>
       </div>
     </div>
 

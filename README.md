@@ -37,6 +37,16 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 - When the match ends a **battle report** shows accuracy, damage, best shot, biggest crater, top weapon and more.
 - The game fills the whole window (no scrolling): the battlefield and the control panel (angle, power, weapon, FIRE, drive, switches) are one screen that scales to fit. Press F or the fullscreen button for true fullscreen.
 
+### Playing on a phone or tablet
+
+On a touch screen the game switches to a touch layout by itself (add `?mobile=1` to the address to try it on a computer, `?mobile=0` to turn it off):
+
+- The battlefield fills the screen and the controls float on top of it: **- / +** buttons for angle and power (tap for one step, hold to go faster), the weapon list, big **FIRE!** and hold-to-drive arrows.
+- You can also **drag on the battlefield** to aim: sideways changes the angle, up and down changes the power.
+- The three-bar button opens the settings (aim guide, retro FX, sound, music, rematch, menu, fullscreen).
+- Tapping *Draft Battle* or *Quick Play* switches to fullscreen and locks the screen to landscape where the browser allows it. On iPhone, use Share, then *Add to Home Screen* to get a fullscreen app (there is a `manifest.json` for this). Landscape is best; portrait works too, with the controls stacked under the battlefield.
+- Frozen or EMP-locked controls are greyed out, just like on the desktop sliders.
+
 Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = drive, 1-9 and 0 = choose weapon 1-10, Space = fire, N or the Rematch button = new map, same weapons, M = music on/off, F = fullscreen, Esc = menu.
 
 ## Files

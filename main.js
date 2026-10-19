@@ -265,6 +265,7 @@ function drawAimGuide() {
 
 // ---- The scoreboard and messages (arcade text) -----------------------------
 function neonText(str, x, y, color, size, align) {
+  size = Math.round(size * hudK);
   ctx.font = size + "px " + FONT;
   ctx.textAlign = align || "left";
   ctx.textBaseline = "top";
@@ -620,10 +621,12 @@ draftGo.addEventListener("click", () => {
   menuOpen = false;
 });
 
-startButton.addEventListener("click", startGame);
+function goFullscreenOnPhone() { if (document.body.classList.contains("mobile") && !document.fullscreenElement) enterFullscreen(); }
+startButton.addEventListener("click", () => { goFullscreenOnPhone(); startGame(); });
 
 // Quick Play: no draft. Both sides get 10 random weapons from a fresh pool (the computer-friendly ones are more likely)
 document.getElementById("quick").addEventListener("click", () => {
+  goFullscreenOnPhone();
   menu.classList.add("hidden");
   draft.pool = makePool();
   draft.picks = [[], []];
@@ -654,6 +657,14 @@ function syncControls() {
   angleSlider.classList.toggle("locked", !!lk.angle);
   powerSlider.classList.toggle("locked", !!lk.power);
   fireButton.disabled = !canAim;
+  // touch controls
+  tAngle.textContent = Math.round(t.angle) + "\u00B0";
+  tPower.textContent = Math.round(t.power);
+  controlsEl.classList.toggle("locked-angle", !!lk.angle);
+  controlsEl.classList.toggle("locked-power", !!lk.power);
+  for (const b of stepButtons) b.disabled = !canAim || (b.dataset.k === "angle" ? !!lk.angle : !!lk.power);
+  driveL.disabled = driveR.disabled = !canAim || !!lk.drive;
+  document.body.classList.toggle("inmenu", menuOpen || draftOpen || !document.getElementById("stats").classList.contains("hidden"));
   syncWeaponList();
 }
 
@@ -697,6 +708,63 @@ weaponSelect.addEventListener("change", () => {
 });
 fireButton.addEventListener("click", () => game.fire());
 
+// ---- Touch controls ----------------------------------------------------
+const tAngle = document.getElementById("tAngle"), tPower = document.getElementById("tPower");
+const stepButtons = Array.from(document.querySelectorAll("#touch .step"));
+const driveL = document.getElementById("driveL"), driveR = document.getElementById("driveR");
+
+// - / + buttons: tap for one step, hold to keep going (faster the longer you hold)
+for (const b of stepButtons) {
+  const dir = Number(b.dataset.d), kind = b.dataset.k;
+  let delay = null, iv = null, n = 0;
+  const doStep = () => {
+    const k = 1 + Math.min(4, Math.floor(n / 8));
+    n++;
+    if (kind === "angle") game.setAngle(game.tank.angle + dir * k);
+    else game.setPower(game.tank.power + dir * k);
+    syncControls();
+  };
+  const stop = () => { clearTimeout(delay); clearInterval(iv); delay = iv = null; };
+  b.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    stop(); n = 0; doStep();
+    delay = setTimeout(() => { iv = setInterval(doStep, 70); }, 350);
+  });
+  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, stop);
+}
+
+// Drag on the battlefield to aim: sideways = angle, up / down = power
+{
+  const stageEl = document.getElementById("stage");
+  let drag = null;
+  stageEl.addEventListener("pointerdown", (e) => {
+    if (!document.body.classList.contains("mobile") || e.pointerType === "mouse") return;
+    if (menuOpen || draftOpen || game.phase !== "aim" || game.isAiTurn) return;
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, a: game.tank.angle, p: game.tank.power };
+    try { stageEl.setPointerCapture(e.pointerId); } catch (err) { /* fine */ }
+  });
+  stageEl.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;   // finger distance in screen pixels
+    game.setAngle(drag.a - dx * 0.35);
+    game.setPower(drag.p - dy * 0.2);
+    syncControls();
+  });
+  const end = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
+  stageEl.addEventListener("pointerup", end);
+  stageEl.addEventListener("pointercancel", end);
+}
+
+// Settings pop-up (the three-bar button)
+document.getElementById("gear").addEventListener("click", (e) => { e.stopPropagation(); controlsEl.classList.toggle("open"); });
+document.addEventListener("pointerdown", (e) => {
+  if (!controlsEl.classList.contains("open")) return;
+  if (e.target.closest(".opts") || e.target.closest("#gear")) return;
+  controlsEl.classList.remove("open");
+});
+for (const id of ["newgame", "menubtn", "fullscreen"]) document.getElementById(id).addEventListener("click", () => controlsEl.classList.remove("open"));
+document.addEventListener("contextmenu", (e) => { if (document.body.classList.contains("mobile")) e.preventDefault(); });
+
 // Retro FX: rain, lightning and scanlines can be switched off (remembered between visits)
 function applyFx() {
   FX.enabled = fxBox.checked;
@@ -707,19 +775,64 @@ try { if (localStorage.getItem("rustyTanksFx") === "0") fxBox.checked = false; }
 fxBox.addEventListener("change", applyFx);
 applyFx();
 
-// ---- Fullscreen layout: scale the 960 x 650 game frame to fit the window ----
+// ---- Layout: scale the game to fit the window ----
+// Desktop: one 960 x 650 frame (battlefield + control panel). Touch devices: the battlefield fills the
+// screen and the controls float on top of it (see "Phones and tablets" in index.html).
 const gameFrame = document.getElementById("game");
+const touchQuery = window.matchMedia ? window.matchMedia("(pointer: coarse)") : { matches: false };
+function wantMobile() {
+  const q = new URLSearchParams(location.search).get("mobile");
+  if (q === "1") return true;
+  if (q === "0") return false;
+  return touchQuery.matches;
+}
+let hudK = 1;     // arcade text is drawn a bit bigger on small screens
 function fitGame() {
-  const s = Math.min(window.innerWidth / 960, window.innerHeight / 650);
-  gameFrame.style.setProperty("--scale", s.toFixed(4));
+  const mobile = wantMobile();
+  const portrait = window.innerHeight > window.innerWidth;
+  document.body.classList.toggle("mobile", mobile);
+  document.body.classList.toggle("portrait", mobile && portrait);
+  if (mobile) {
+    const s = portrait ? window.innerWidth / 960 : Math.min(window.innerWidth / 960, window.innerHeight / 540);
+    gameFrame.style.setProperty("--ms", s.toFixed(4));
+    hudK = Math.max(1, Math.min(1.7, 0.78 / s));
+  } else {
+    const s = Math.min(window.innerWidth / 960, window.innerHeight / 650);
+    gameFrame.style.setProperty("--scale", s.toFixed(4));
+    hudK = 1;
+  }
+  const rh = document.getElementById("fsHint");
+  if (rh) {
+    rh.textContent = !mobile ? "" : portrait ? "Tip: turn your phone sideways for a bigger battlefield."
+      : rh.dataset.ios ? "Tip: Share > Add to Home Screen to play fullscreen." : "";
+  }
 }
 window.addEventListener("resize", fitGame);
+window.addEventListener("orientationchange", fitGame);
+if (touchQuery.addEventListener) touchQuery.addEventListener("change", fitGame);
 fitGame();
 function toggleFullscreen() {
   try {
     if (document.fullscreenElement) document.exitFullscreen();
-    else document.documentElement.requestFullscreen();
+    else enterFullscreen();
   } catch (e) { /* not supported */ }
+}
+// Fullscreen, and on phones also lock the screen to landscape (both only work from a tap)
+function enterFullscreen() {
+  const el = document.documentElement;
+  if (!el.requestFullscreen) return;
+  const p = el.requestFullscreen({ navigationUI: "hide" });
+  const lock = () => { try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(() => {}); } catch (e) { /* not allowed */ } };
+  if (p && p.then) p.then(lock).catch(() => {});
+}
+const fsSupported = !!document.documentElement.requestFullscreen;
+{
+  const hint = document.getElementById("fsHint");
+  const btn = document.getElementById("menuFs");
+  if (!fsSupported) { btn.style.display = "none"; }
+  btn.addEventListener("click", () => { toggleFullscreen(); });
+  document.addEventListener("fullscreenchange", () => { btn.textContent = document.fullscreenElement ? "\u26F6 Leave fullscreen" : "\u26F6 Go fullscreen"; fitGame(); });
+  if (!fsSupported && hint) hint.dataset.ios = "1";
 }
 document.getElementById("fullscreen").addEventListener("click", toggleFullscreen);
 window.addEventListener("keydown", (e) => {
