@@ -37,6 +37,10 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 - When the match ends a **battle report** shows accuracy, damage, best shot, biggest crater, top weapon and more.
 - The game fills the whole window (no scrolling): the battlefield and the control panel (angle, power, weapon, FIRE, drive, switches) are one screen that scales to fit. Press F or the fullscreen button for true fullscreen.
 
+### Weapon icons
+
+Every weapon has an icon on the draft cards and next to the weapon list. All 61 icons are packed in one picture, `assets/weapon-icons.webp` (8 per row, in the same order as `weapons.js`), so the game loads one small file. The artwork sheets are kept in `assets/weapon-art/`, and `python3 tools/build_weapon_icons.py` cuts them up and rebuilds the picture (needs Pillow). To change an icon, replace the sheet or edit the `MAP` at the top of that script and run it again. A new weapon added at the end of `weapons.js` gets the next free spot in the picture. `assets/weapon-art/PROMPTS.md` has the image-generator prompts that were used.
+
 ### The Ladder
 
 Press **LADDER** on the menu for a five-match tournament against named computer opponents. Every match is in a harsher world, and you and the opponent get random weapons:
@@ -66,6 +70,7 @@ Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = dr
 ## Files
 - `index.html`: page layout and styling
 - `weapons.js`: the list of weapons (copy a line to invent a new one)
+- `tools/build_weapon_icons.py`: builds the weapon icon picture from the art sheets
 - `ladder.js`: the Ladder (the five opponents and the progress rules)
 - `game.js`: the rules (terrain, physics, wind, scoring, turns, computer opponent)
 - `fx.js`: the neon arcade effects (night city, rain, lightning, sparks, glowing shells, screen shake)

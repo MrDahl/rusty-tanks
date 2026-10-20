@@ -506,6 +506,8 @@ const POOL_SIZE = PICKS_EACH * 2;
 const draftSection = document.getElementById("draft");
 const stageEl = document.getElementById("stage");
 const controlsEl = document.getElementById("controls");
+const wiconEl = document.getElementById("wicon");
+let lastWicon = -1;
 const draftGo = document.getElementById("draftGo");
 const draft = { picks: [[], []], pool: [], token: 0 };
 let draftOpen = false;
@@ -544,6 +546,13 @@ function makePool() {
   return pool.sort((x, y) => x - y);
 }
 
+// Weapon icons come from one picture (assets/weapon-icons.webp): 8 per row, in weapon order
+const WICON_COLS = 8;
+function setIcon(el, weaponIndex) {
+  el.style.setProperty("--col", weaponIndex % WICON_COLS);
+  el.style.setProperty("--row", Math.floor(weaponIndex / WICON_COLS));
+}
+
 function buildWeaponGrid() {
   const grid = document.getElementById("weaponGrid");
   grid.innerHTML = "";
@@ -553,9 +562,10 @@ function buildWeaponGrid() {
     b.className = "wcard";
     b.dataset.weapon = i;
     b.style.borderLeftColor = lighten(w.color, 0.55);
-    b.innerHTML = "<b></b><span></span><em></em>";
-    b.children[0].textContent = w.name;
-    b.children[1].textContent = w.info;
+    b.innerHTML = "<i class='wicon'></i><b></b><span></span><em></em>";
+    setIcon(b.children[0], i);
+    b.children[1].textContent = w.name;
+    b.children[2].textContent = w.info;
     b.addEventListener("click", () => draftPick(i));
     grid.appendChild(b);
   }
@@ -692,6 +702,7 @@ function syncControls() {
   angleSlider.classList.toggle("locked", !!lk.angle);
   powerSlider.classList.toggle("locked", !!lk.power);
   fireButton.disabled = !canAim;
+  if (t.weapon !== lastWicon) { lastWicon = t.weapon; setIcon(wiconEl, t.weapon); }
   // touch controls
   tAngle.textContent = Math.round(t.angle) + "\u00B0";
   tPower.textContent = Math.round(t.power);

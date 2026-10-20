@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
+  <link rel="preload" as="image" href="assets/weapon-icons.webp">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -228,6 +229,21 @@
     #draft > .row button { padding: 7px 16px; }
 
 
+    /* Weapon icons: one picture holds all of them (8 icons per row, in the same order as weapons.js) */
+    .wicon {
+      --iw: 72px; flex: none; display: block; width: var(--iw); height: calc(var(--iw) * 2 / 3); border-radius: 4px;
+      background: #0a0f24 url(assets/weapon-icons.webp) no-repeat;
+      background-size: calc(var(--iw) * 8) calc(var(--iw) * 16 / 3);
+      background-position: calc(var(--iw) * var(--col, 0) * -1) calc(var(--iw) * 2 / 3 * var(--row, 0) * -1);
+      box-shadow: 0 0 0 1px #27457a;
+    }
+    #wicon { --iw: 48px; }
+    button.wcard { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; }
+    button.wcard .wicon { --iw: 60px; grid-column: 1; grid-row: 1; }
+    button.wcard b { grid-column: 2; grid-row: 1; margin: 0; }
+    button.wcard span { grid-column: 1 / -1; grid-row: 2; }
+    button.wcard em { grid-column: 1 / -1; grid-row: 3; }
+
     /* The ladder */
     button.ladderbtn { background: #ffb347; color: #060a1a; box-shadow: 0 0 12px #ffb34799; }
     #ladder { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(4, 6, 20, 0.94); padding: 14px 40px; box-sizing: border-box; }
@@ -316,6 +332,8 @@
     }
     body.mobile #mid label.wsel { flex: 1; min-width: 0; max-width: 300px; font-size: 0; display: block; }
     body.mobile #mid select { width: 100%; height: 44px; font-size: 14px; border-radius: 10px; background: rgba(8, 13, 38, 0.85); border: 2px solid #27457a; color: #cfe8ff; padding: 0 6px; }
+    body.mobile #wicon { --iw: 46px; }
+    body.mobile button.wcard .wicon { --iw: 50px; }
     body.mobile #gear { display: block; width: 44px; height: 44px; padding: 0; font-size: 20px; border-radius: 10px; flex: none; }
     /* settings pop-up */
     body.mobile .opts {
@@ -401,7 +419,7 @@
       <div class="crow">
         <label class="slider">Angle <input id="angle" type="range" min="0" max="180" step="1" value="55"> <span class="value" id="angleLabel">55&deg;</span></label>
         <label class="slider">Power <input id="power" type="range" min="5" max="100" step="1" value="60"> <span class="value" id="powerLabel">60</span></label>
-        <div id="mid"><label class="wsel">Weapon <select id="weapon"></select></label><button id="gear" class="secondary" aria-label="Settings">&#9776;</button></div>
+        <div id="mid"><span id="wicon" class="wicon"></span><label class="wsel">Weapon <select id="weapon"></select></label><button id="gear" class="secondary" aria-label="Settings">&#9776;</button></div>
         <button id="fire">FIRE!</button>
       </div>
       <div class="crow">
