@@ -117,3 +117,74 @@ Row 4:
 FIXING ONE ICON (use this if one cell came out wrong)
 Same style as the attached sheet. Create ONE icon, 1200x1200, flat dark navy #0a0f24 background, no text, no frame: <description from the list above>. 16-bit pixel art, bold silhouette, readable at 64 px, light from the upper left.
 ```
+
+
+## Round 2: the 29 icons still in the old style, plus 3 versions of Earth Eater (ChatGPT style)
+
+Attach the two ChatGPT sheets (shells and ground shapers) as the style reference. Sheet C covers: Rivet Shot, Big Bolt, Rapid Rivets, Needle Gun, Magnet Dart, Hornet Swarm, Twin Splitter, Shrapnel Pod, Ricochet Rivet, Rolling Barrel, Warp Hop, Gale Cannon, Gravity Well, Arc Lamp, Hail of Slag, Seismic Slam. Sheet D covers: Burrower, Silo Drill, Tunneler, Slag Heap, Sludge Bomb, Mud Pie, Frost Shell, Napalm Shell, Fire Bomb, Lava Glob, Ember Rain, Nuclear Warhead, EMP Pulse, and Earth Eater (3 versions to choose from).
+
+```
+STYLE REFERENCE: I attach two finished sheets (shells and ground shapers). Match their look EXACTLY: same pixel size, same glow, same outline treatment, same level of detail, so the new sheet looks like it came from the same artist in the same session.
+
+Create a sprite sheet of 16 weapon icons for a retro neon artillery game. Landscape image, as large as you can make it.
+
+LAYOUT: exactly 4 columns x 4 rows = 16 cells of identical size in a strict regular grid, small equal gutters (about 3% of the width) and an equal margin around the grid. Every cell is a rounded rectangle, 3:2 landscape, with a thin glowing neon outline whose colour matches the weapon family (orange = explosives and fire, blue = energy and electric, green = toxic and earth, magenta/pink = special and tricky, grey-blue = heavy metal, cyan = ice). The inside of each cell is near-black navy. The sheet background around the cells is near-black.
+NO TEXT of any kind: no labels, names, numbers, letters or captions, no watermark. No frame around the whole sheet.
+
+ART STYLE (same as the attached sheets): rich, detailed 16-bit pixel art with chunky 2-3 px pixel clusters, strong emissive glow on fire, sparks, energy and embers, bright saturated colours, metal with sharp highlights, dark outlines on solid objects, little particles (sparks, dust, debris) around the main subject. Light from the upper left.
+READABILITY: each icon must still be recognisable when shrunk to 64 px wide: ONE main subject filling about 75% of the cell, bold silhouette, high contrast against the dark background, never touching the outline. Ground and hole icons are side-view cross-sections of soil with a thin bright-green grass line on top, brown rocky soil, and a glowing orange edge where the ground was cut.
+ORIGINAL DESIGNS ONLY: do not copy the icons of any existing game. Fill all 16 cells and keep them all in the same style.
+```
+
+```
+SHEET C: PROJECTILES AND FORCES. The 16 cells in reading order (row by row, left to right):
+Row 1:
+1. A classic reliable artillery shell with a rivet band, a small neat flame trail, flying up and to the right. The simplest, plainest icon of the set.
+2. A very large, fat, heavy red-and-steel shell with a big hex bolt head on its nose, a huge flame trail. It looks clearly bigger and heavier than icon 1.
+3. Five small shells in a row, one behind the other along a curved path, each with its own small flame, muzzle sparks at the start of the row.
+4. A long, thin, needle-shaped projectile flying perfectly flat and very fast, a long bright streak behind it, a tiny glinting tip.
+Row 2:
+5. A small dart with a red horseshoe magnet on its back, curving along a bent path toward a small tank, faint magnetic field lines.
+6. Four small yellow-and-black striped hornet-like missiles curving in from the left toward a small tank on the right.
+7. A shell splitting cleanly into two shells at the top of an arc, the two halves flying apart in a V shape, a small burst flash at the split point.
+8. A pod bursting open, seven small shards fanning out upward from it like a spray, sparks.
+Row 3:
+9. A round shell skipping along the ground like a flat stone, six small bounce marks and puffs of dust in a row along the ground.
+10. A wooden-and-steel barrel rolling down a gentle slope of ground, dust cloud and small stones behind it, motion lines.
+11. A small cyan tank dissolving into pixels on the left, a glowing portal ring on the right where it reappears, a dotted arc between them.
+12. A cannon muzzle blasting a huge swirl of wind to the right that is blowing a small tank away, debris and wind streaks.
+Row 4:
+13. A swirling purple-and-blue vortex (gravity well) pulling a small tank and some rocks inward toward the centre.
+14. An electrode lamp on the left with a bright jagged blue electric arc jumping to a small tank on the right, crackling sparks.
+15. Glowing molten slag rocks raining down from a dark smoky sky onto the ground, trails of fire behind each rock.
+16. A heavy hammer slamming into the ground, glowing cracks and shock ripples spreading out along the ground in both directions.
+```
+
+```
+SHEET D: GROUND, FIRE, ICE AND ENERGY. The 16 cells in reading order (row by row, left to right):
+Row 1:
+1. A shell with a drill-bit nose half buried in the ground, soil spraying up, a glow of explosion starting underneath (side-view cross-section).
+2. A missile-silo shaft: a very deep, narrow, perfectly round vertical shaft in a soil cross-section with a big spiral drill bit at the top, sparks, and depth rings on the shaft walls.
+3. A hill in cross-section with a long horizontal tunnel bored through it and a spiral tunnel-boring drill head just coming out of one end, dust and rocks.
+4. A bomb landing on a pile of dark slag and ore rocks, the pile heaping up, a few glowing hot spots in the heap.
+Row 2:
+5. A bomb dumping a huge mountain of wet dirt and sludge, the mound big and dripping, much larger than a normal mound.
+6. A small, round pie-shaped heap of mud with a splat, partly covering a small cyan tank so only the turret sticks out.
+7. A shell covered in frost with a small tank turret next to it turning into a block of ice, ice crystals and snowflakes.
+8. A shell dripping burning napalm, fire pouring down a slope of ground and flowing into a crater at the bottom.
+Row 3:
+9. A bomb bursting into dozens of small flames scattered wide over the ground, a wide fan of small fires.
+10. A glowing bowl-shaped crater in the ground filled with a big blob of hot molten lava and flames, a glob splashing up.
+11. Glowing embers falling from a dark smoky sky, small fires starting on the ground below, sparks.
+12. A warhead with a green-and-yellow radiation trefoil symbol next to a big mushroom cloud, toxic green glow and fallout particles.
+Row 4:
+13. A small tank with dead grey wheels and blue electric sparks crawling over it, a bright blue electromagnetic pulse ring spreading out from it.
+14. Cross-section of soil with a huge, wide, deep bite taken out of the ground, jagged tooth-like edges on the rim of the hole, a cloud of dust. (Earth Eater, version 1)
+15. A giant monster mouth made of earth, with rocky teeth, opening in the ground and chomping a big chunk of soil, crumbs flying. (Earth Eater, version 2)
+16. A cone-shaped vacuum beam sucking the soil up out of the ground in glowing particles, leaving a big wide crater below. (Earth Eater, version 3)
+```
+
+```
+FIXING ONE ICON (use this if one cell came out wrong)
+Same style as the attached sheets. Create ONE icon, landscape 3:2, near-black navy background, thin glowing neon outline, no text: <paste the cell description>. Rich 16-bit pixel art with chunky pixels and strong glow, bold silhouette, readable at 64 px, light from the upper left.
+```
