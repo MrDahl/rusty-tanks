@@ -227,6 +227,29 @@
     #draft > .row { margin-top: auto; }
     #draft > .row button { padding: 7px 16px; }
 
+
+    /* The ladder */
+    button.ladderbtn { background: #ffb347; color: #060a1a; box-shadow: 0 0 12px #ffb34799; }
+    #ladder { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(4, 6, 20, 0.94); padding: 14px 40px; box-sizing: border-box; }
+    #ladder.hidden { display: none; }
+    #ladder h2 { margin: 0 0 4px; font-size: 24px; color: #ffb347; letter-spacing: 4px; text-transform: uppercase; text-shadow: 0 0 8px #ffb347, 0 0 22px #ffb34766; }
+    #ladderSub { margin: 0 0 10px; font-size: 11px; color: #9fc4ea; min-height: 1.3em; text-align: center; }
+    #rungs { width: 100%; max-width: 700px; display: flex; flex-direction: column; gap: 6px; }
+    .rung { display: flex; align-items: center; gap: 12px; padding: 7px 12px; background: #0c1330; border: 2px solid #27457a; border-left-width: 8px; border-radius: 4px; }
+    .rung .num { font-size: 16px; width: 26px; text-align: center; color: #7f9cc4; }
+    .rung .who { flex: 1; min-width: 0; }
+    .rung .who b { display: block; font-size: 11px; letter-spacing: 1px; color: #cfe8ff; }
+    .rung .who span { display: block; margin-top: 3px; font-family: "Courier New", monospace; font-size: 13px; color: #7f9cc4; }
+    .rung .state { font-size: 10px; text-align: right; white-space: nowrap; color: #7f9cc4; }
+    .rung.done { border-color: #2f8f5a; } .rung.done .num, .rung.done .state { color: #8ff0b8; }
+    .rung.next { border-color: #ffb347; background: #1c1a30; box-shadow: 0 0 14px #ffb34744; } .rung.next .num, .rung.next .who b, .rung.next .state { color: #ffb347; }
+    .rung.locked { opacity: 0.55; }
+    #ladderQuip { margin: 10px 0 0; min-height: 1.4em; text-align: center; font-family: "Courier New", monospace; font-size: 14px; color: #cfe8ff; }
+    #ladder .row { margin-top: 12px; }
+    #ladderFight { background: #ffb347; color: #060a1a; padding: 10px 34px; font-size: 14px; box-shadow: 0 0 12px #ffb34799; }
+    #statsLadder { margin: 0 0 8px; min-height: 1em; font-size: 11px; color: #ffb347; letter-spacing: 1px; text-align: center; }
+    #statsLadder:empty { display: none; }
+
     /* Post-game statistics */
     #stats { position: absolute; inset: 0; z-index: 7; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(4, 6, 20, 0.9); padding: 14px 40px; box-sizing: border-box; }
     #stats.hidden { display: none; }
@@ -317,6 +340,11 @@
     body.mobile #weaponGrid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); flex: none; }
     body.mobile #draft > .row { position: sticky; bottom: 0; margin: 0 -12px; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); background: #0a1030; border-top: 2px solid #27457a; }
     body.mobile #draft > .row button { min-height: 42px; }
+    body.mobile #ladder { justify-content: flex-start; overflow-y: auto; touch-action: pan-y; padding: 12px 14px max(14px, env(safe-area-inset-bottom)); }
+    body.mobile #ladder h2 { margin-top: auto; }
+    body.mobile #ladder .row { margin-bottom: auto; }
+    body.mobile #ladder .row button { min-height: 44px; }
+    body.mobile .rung { padding: 5px 10px; }
     body.mobile #stats { justify-content: flex-start; padding: 12px 14px max(14px, env(safe-area-inset-bottom)); }
     body.mobile #stats h2 { margin-top: auto; }
     body.mobile #stats .row { margin-bottom: auto; }
@@ -351,6 +379,13 @@
       body.mobile #statsTable th, body.mobile #statsTable td { padding: 2px 8px; }
       body.mobile #statsTable tr.big td { font-size: 15px; padding: 3px 8px; }
       body.mobile #statsTable td small { font-size: 9px; }
+      body.mobile #ladder h2 { font-size: 16px; }
+      body.mobile #ladderSub { font-size: 10px; margin-bottom: 6px; }
+      body.mobile #rungs { gap: 4px; }
+      body.mobile .rung { padding: 3px 10px; }
+      body.mobile .rung .who span { font-size: 11px; margin-top: 1px; }
+      body.mobile #ladderQuip { font-size: 12px; margin-top: 6px; }
+      body.mobile #ladder .row { margin-top: 8px; }
       body.mobile #stats h2 { font-size: 16px; }
       body.mobile #statsWinner { font-size: 11px; margin-bottom: 6px; }
       body.mobile #stats .row { margin-top: 8px; }
@@ -420,16 +455,28 @@
         </div>
         <p class="tag" id="seasonInfo">Clear skies. No surprises.</p>
 
-        <div class="row"><button id="start" class="start">DRAFT BATTLE</button><button id="quick" class="start quick">QUICK PLAY</button></div>
-        <p class="tag" id="startInfo">Draft: take turns picking 10 weapons from a pool of 20. Quick Play: random weapons, shoot right away.</p>
+        <div class="row"><button id="start" class="start">DRAFT BATTLE</button><button id="quick" class="start quick">QUICK PLAY</button><button id="ladderBtn" class="start ladderbtn">LADDER</button></div>
+        <p class="tag" id="startInfo">Draft: take turns picking 10 weapons from a pool of 20. Quick Play: random weapons, shoot right away. Ladder: beat 5 opponents in harsher and harsher worlds.</p>
         <p class="keys mobileonly">Touch: hold &minus; / + to aim, or <b>drag on the battlefield</b> (sideways = angle, up/down = power). Hold &#9664; &#9654; to drive.</p>
         <p class="keys desktoponly">Keys: &larr; &rarr; angle &nbsp; &uarr; &darr; power (Shift = big steps) &nbsp; A / D drive &nbsp; 1-9 / 0 weapon &nbsp; Space fire<br>N rematch &nbsp; M music &nbsp; F fullscreen &nbsp; Esc menu &nbsp; (click once to switch the sound on)</p>
+      </div>
+    </div>
+
+    <div id="ladder" class="hidden">
+      <h2>The Ladder</h2>
+      <p id="ladderSub"></p>
+      <div id="rungs"></div>
+      <p id="ladderQuip"></p>
+      <div class="row">
+        <button id="ladderFight">FIGHT!</button>
+        <button id="ladderBack" class="secondary">Menu</button>
       </div>
     </div>
 
     <div id="stats" class="hidden">
       <h2>Battle report</h2>
       <p id="statsWinner"></p>
+      <p id="statsLadder"></p>
       <table id="statsTable"></table>
       <div class="row">
         <button id="statsRematch">Rematch</button>
@@ -457,6 +504,7 @@
 
   <script src="weapons.js"></script>
   <script src="game.js"></script>
+  <script src="ladder.js"></script>
   <script src="fx.js"></script>
   <script src="sound.js"></script>
   <script src="main.js"></script>

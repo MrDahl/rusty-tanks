@@ -37,6 +37,20 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 - When the match ends a **battle report** shows accuracy, damage, best shot, biggest crater, top weapon and more.
 - The game fills the whole window (no scrolling): the battlefield and the control panel (angle, power, weapon, FIRE, drive, switches) are one screen that scales to fit. Press F or the fullscreen button for true fullscreen.
 
+### The Ladder
+
+Press **LADDER** on the menu for a five-match tournament against named computer opponents. Every match is in a harsher world, and you and the opponent get random weapons:
+
+| # | Opponent | Computer | Season | Wind |
+|---|---|---|---|---|
+| 1 | Rookie | Easy | Normal | none |
+| 2 | Mudlark | Easy | Monsoon | light |
+| 3 | Frostbite | Normal | Ice Age | normal |
+| 4 | Thunder | Hard | Thunderstorm | normal |
+| 5 | Doomsday | Hard | Apocalypse | strong |
+
+Win to climb. If you lose you may retry the match (you have 2 continues); after that the ladder starts over. A draw is simply replayed. Your progress is saved in the browser, and the menu button then says *Resume ladder*. The opponents and their worlds are one list at the top of `ladder.js`, so you can change them or add rungs.
+
 ### Playing on a phone or tablet
 
 On a touch screen the game switches to a touch layout by itself (add `?mobile=1` to the address to try it on a computer, `?mobile=0` to turn it off):
@@ -52,6 +66,7 @@ Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = dr
 ## Files
 - `index.html`: page layout and styling
 - `weapons.js`: the list of weapons (copy a line to invent a new one)
+- `ladder.js`: the Ladder (the five opponents and the progress rules)
 - `game.js`: the rules (terrain, physics, wind, scoring, turns, computer opponent)
 - `fx.js`: the neon arcade effects (night city, rain, lightning, sparks, glowing shells, screen shake)
 - `sound.js`: synthesized sound effects and chiptune music (Web Audio)

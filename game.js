@@ -404,11 +404,16 @@ function newStats() {
 class Game {
   // ai = [player1, player2]: null for a human, or "easy" / "normal" / "hard"
   // loadouts = [[weapon numbers player 1 drafted], [player 2's]], or nothing for the quick-test setup
-  constructor(seed, ai, loadouts, season) {
-    this.newMatch(seed === undefined ? Date.now() : seed, ai, loadouts, season);
+  // opts (optional, for the ladder): { windScale: 0 = no wind, 0.5 = light, 1 = normal, 1.5 = strong,
+  //                                    names: [null, "Mudlark"] = names for the players }
+  constructor(seed, ai, loadouts, season, opts) {
+    this.newMatch(seed === undefined ? Date.now() : seed, ai, loadouts, season, opts);
   }
 
-  newMatch(seed, ai, loadouts, season) {
+  newMatch(seed, ai, loadouts, season, opts) {
+    // opts always starts from the defaults, so a ladder match never leaks into a normal one
+    this.windScale = opts && opts.windScale !== undefined ? opts.windScale : 1;
+    this.names = opts && opts.names ? opts.names : null;
     // If no new setting is given, keep the previous one
     this.ai = ai !== undefined ? ai : (this.ai || [null, null]);
     this.aiPlan = null;
@@ -469,8 +474,8 @@ class Game {
 
     this.current = 0;
     this.shotsFired = [0, 0];
-    this.wind = Math.round((this.rand() * 2 - 1) * 10);
-    if (this.weather === "hurricane") this.wind = this.hurricaneWind(this.rand() < 0.5 ? -1 : 1);
+    this.wind = Math.round((this.rand() * 2 - 1) * 10 * this.windScale) || 0;
+    if (this.weather === "hurricane") this.wind = Math.round(this.hurricaneWind(this.rand() < 0.5 ? -1 : 1) * this.windScale) || 0;
     this.phase = "aim"; // "aim" -> "flight" -> "boom" -> "settle" -> ("weather" ->) "aim" ... -> "over"
     this.projs = [];        // all shells currently in the air
     this.explosions = [];   // explosion animations
@@ -493,6 +498,7 @@ class Game {
   }
 
   playerName(i) {
+    if (this.names && this.names[i]) return this.names[i];
     return this.ai[i] ? "Computer" : "Player " + (i + 1);
   }
 
@@ -1419,15 +1425,16 @@ class Game {
 
   // Wind changes every turn: usually a small nudge, sometimes a big gust
   changeWind() {
+    const k = this.windScale;
     if (this.weather === "hurricane") {           // a hurricane always turns around
-      this.wind = this.hurricaneWind(this.wind > 0 ? -1 : 1);
+      this.wind = Math.round(this.hurricaneWind(this.wind > 0 ? -1 : 1) * k) || 0;
       return;
     }
     if (this.rand() < 0.3) {
-      this.wind = Math.round((this.rand() * 2 - 1) * WIND_MAX);
+      this.wind = Math.round((this.rand() * 2 - 1) * WIND_MAX * k) || 0;
     } else {
-      const w = this.wind + (this.rand() * 10 - 5);
-      this.wind = Math.round(Math.max(-WIND_MAX, Math.min(WIND_MAX, w)));
+      const w = this.wind + (this.rand() * 10 - 5) * k;
+      this.wind = Math.round(Math.max(-WIND_MAX * k, Math.min(WIND_MAX * k, w))) || 0;
     }
   }
 

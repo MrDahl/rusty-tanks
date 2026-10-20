@@ -27,8 +27,23 @@ const startButton = document.getElementById("start");
 const diffBlock = document.getElementById("diffBlock");
 let menuOpen = true;
 
+// ---- The Ladder (rules and progress live in ladder.js) ----
+let ladderMode = false;          // true while a ladder match is on
+let ladderOutcome = null;        // what the finished match led to: advance / champion / retry / failed / draw
+let ladderResolvedSeed = null;   // so a finished match is counted only once
+let ladderMatchRung = -1;        // which rung the match on screen belongs to
+const LADDER_KEY = "rustyTanksLadder";
+function loadLadder() {
+  try { return new LadderRun(JSON.parse(localStorage.getItem(LADDER_KEY))); } catch (e) { return new LadderRun(); }
+}
+function saveLadder() {
+  try { localStorage.setItem(LADDER_KEY, JSON.stringify(ladder)); } catch (e) { /* not saved */ }
+}
+let ladder = loadLadder();
+
 // "ai" tells the game who is a computer: [player 1, player 2]
 function aiSetting() {
+  if (ladderMode && ladder.current) return [null, ladder.current.ai];
   return settings.mode === "cpu" ? [null, settings.difficulty] : [null, null];
 }
 
@@ -300,6 +315,7 @@ const SEASON_INFO = {
 };
 
 function shortName(i, ai) {
+  if (!ai && game.names && game.names[i]) return game.names[i].toUpperCase();
   ai = ai || game.ai;
   if (!ai[i]) return "P" + (i + 1);
   return "CPU-" + ai[i].toUpperCase();
@@ -376,6 +392,10 @@ function drawHud() {
     neonText(SEASON_NAMES[game.weather].toUpperCase(), 18, 78, SEASON_COLORS[game.weather], 9, "left");
   }
 
+  if (ladderMode && ladderMatchRung >= 0) {
+    neonText("LADDER " + (ladderMatchRung + 1) + "/" + LADDER_RUNGS.length, W - 18, 78, NEON.amber, 9, "right");
+  }
+
   if (game.phase === "over") {
     ctx.fillStyle = "rgba(4, 6, 20, 0.78)";
     ctx.fillRect(0, H / 2 - 80, W, 160);
@@ -383,7 +403,7 @@ function drawHud() {
     const col = a === b ? NEON.amber : COLORS.tanks[a > b ? 0 : 1];
     neonText(game.winnerText().toUpperCase(), W / 2, H / 2 - 44, col, 30, "center");
     neonText(a + "  -  " + b, W / 2, H / 2 + 2, COLORS.text, 16, "center");
-    neonText("N = REMATCH    ESC = MENU", W / 2, H / 2 + 38, COLORS.textDim, 10, "center");
+    neonText(ladderMode ? "N = CONTINUE    ESC = MENU" : "N = REMATCH    ESC = MENU", W / 2, H / 2 + 38, COLORS.textDim, 10, "center");
   }
   ctx.restore();
 }
@@ -452,11 +472,17 @@ for (const b of document.querySelectorAll("#seasonRow button")) {
 
 function showMenu() {
   menuOpen = true;
+  document.getElementById("ladder").classList.add("hidden");
+  updateLadderButton();
   menu.classList.remove("hidden");
+}
+function updateLadderButton() {
+  document.getElementById("ladderBtn").textContent = ladder.rung > 0 && !ladder.done ? "RESUME LADDER" : "LADDER";
 }
 
 // Start button: go to the weapon draft
 function startGame() {
+  ladderMode = false;
   menu.classList.add("hidden");
   openDraft();
 }
@@ -464,6 +490,10 @@ function startGame() {
 // New map, same weapons
 let currentLoadouts = null;
 function rematch() {
+  if (ladderMode) {           // on the ladder, a finished match decides what comes next
+    if (game.phase === "over" && ladderOutcome) ladderPrimary();
+    return;
+  }
   game.newMatch(Date.now(), aiSetting(), currentLoadouts ? [currentLoadouts[0].slice(), currentLoadouts[1].slice()] : undefined, settings.season);
 }
 
@@ -625,9 +655,8 @@ function goFullscreenOnPhone() { if (document.body.classList.contains("mobile") 
 startButton.addEventListener("click", () => { goFullscreenOnPhone(); startGame(); });
 
 // Quick Play: no draft. Both sides get 10 random weapons from a fresh pool (the computer-friendly ones are more likely)
-document.getElementById("quick").addEventListener("click", () => {
-  goFullscreenOnPhone();
-  menu.classList.add("hidden");
+// Both sides get 10 random weapons from a fresh pool (the computer-friendly ones are more likely)
+function randomLoadouts() {
   draft.pool = makePool();
   draft.picks = [[], []];
   while (!draftDone()) {
@@ -635,7 +664,13 @@ document.getElementById("quick").addEventListener("click", () => {
     const avail = availableWeapons();
     draft.picks[who].push(aiDraftPick(avail, Math.random));
   }
-  currentLoadouts = [draft.picks[0].slice(), draft.picks[1].slice()];
+  return [draft.picks[0].slice(), draft.picks[1].slice()];
+}
+document.getElementById("quick").addEventListener("click", () => {
+  goFullscreenOnPhone();
+  ladderMode = false;
+  menu.classList.add("hidden");
+  currentLoadouts = randomLoadouts();
   game.newMatch(Date.now(), aiSetting(), [currentLoadouts[0].slice(), currentLoadouts[1].slice()], settings.season);
   menuOpen = false;
 });
@@ -869,7 +904,8 @@ window.addEventListener("keydown", (e) => {
   if (draftOpen) return;
   if (menuOpen) {
     if (e.key === "Enter" && document.activeElement === document.body) {
-      startGame();
+      if (!document.getElementById("ladder").classList.contains("hidden")) document.getElementById("ladderFight").click();
+      else startGame();
       e.preventDefault();
     }
     return;
@@ -915,6 +951,9 @@ function renderStats() {
   const S = game.stats, T = game.tanks;
   const a = T[0].score, b = T[1].score;
   document.getElementById("statsWinner").textContent = a === b ? "IT'S A DRAW!" : game.winnerText().toUpperCase();
+  const lm = ladderMode && ladderOutcome ? ladderMessage() : null;
+  document.getElementById("statsLadder").textContent = lm ? lm.text : "";
+  document.getElementById("statsRematch").textContent = lm ? lm.button : "Rematch";
   const lead = (x, y, higherIsBetter) => (x === y ? [false, false] : higherIsBetter ? [x > y, y > x] : [x < y, y < x]);
   const rows = [];
   const add = (label, v0, v1, cmp, big, sub) => rows.push({ label, v: [v0, v1], win: cmp || [false, false], big: !!big, sub: sub || ["", ""] });
@@ -959,8 +998,97 @@ function updateStatsOverlay(now) {
   }
 }
 document.getElementById("statsRematch").addEventListener("click", () => { statsEl.classList.add("hidden"); rematch(); });
+// (the ladder code below decides what Rematch means while a ladder match is on)
 document.getElementById("statsMenu").addEventListener("click", () => { statsEl.classList.add("hidden"); showMenu(); });
 document.getElementById("statsClose").addEventListener("click", () => { statsDismissed = true; statsEl.classList.add("hidden"); });
+
+// ---- The Ladder screen and match flow ---------------------------------------
+const ladderEl = document.getElementById("ladder");
+const ladderFight = document.getElementById("ladderFight");
+const capital = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+
+function renderLadder(note) {
+  const dots = (n) => "\u25CF".repeat(n) + "\u25CB".repeat(LADDER_CONTINUES - n);
+  let html = "";
+  LADDER_RUNGS.forEach((r, i) => {
+    const cls = i < ladder.rung ? "done" : i === ladder.rung ? "next" : "locked";
+    const res = ladder.results[i];
+    const state = cls === "done" ? "CLEARED" + (res ? "<br>" + res.you + " - " + res.cpu : "") : cls === "next" ? "NEXT" : "LOCKED";
+    html += "<div class='rung " + cls + "'><div class='num'>" + (i + 1) + "</div><div class='who'><b>" + r.name.toUpperCase() + "</b><span>" +
+      capital(r.ai) + " computer &middot; " + SEASON_NAMES[r.season] + " &middot; " + WIND_WORDS[r.wind] + "</span></div><div class='state'>" + state + "</div></div>";
+  });
+  document.getElementById("rungs").innerHTML = html;
+  const sub = document.getElementById("ladderSub"), quip = document.getElementById("ladderQuip");
+  if (ladder.done) {
+    sub.textContent = "CHAMPION! You beat all " + LADDER_RUNGS.length + " opponents" + (ladder.titles > 1 ? " (" + ladder.titles + " titles)" : "") + ".";
+    quip.textContent = "Start a new ladder to do it all again.";
+    ladderFight.textContent = "NEW LADDER";
+  } else {
+    sub.textContent = note || "Match " + (ladder.rung + 1) + " of " + LADDER_RUNGS.length + "   Continues " + dots(ladder.continues);
+    quip.textContent = ladder.current.name + ": " + ladder.current.quip;
+    ladderFight.textContent = ladder.rung === 0 && !ladder.results.some(Boolean) ? "START LADDER" : "FIGHT!";
+  }
+}
+
+function showLadder(note) {
+  menuOpen = true;
+  menu.classList.add("hidden");
+  statsEl.classList.add("hidden");
+  renderLadder(note);
+  ladderEl.classList.remove("hidden");
+}
+
+// A new ladder match: random weapons for both sides, the world of the current rung
+function ladderNewMatch() {
+  const r = ladder.current;
+  if (!r) return;
+  goFullscreenOnPhone();
+  ladderMode = true;
+  ladderOutcome = null;
+  ladderMatchRung = ladder.rung;
+  ladderEl.classList.add("hidden");
+  menu.classList.add("hidden");
+  statsEl.classList.add("hidden");
+  currentLoadouts = randomLoadouts();
+  game.newMatch(Date.now(), aiSetting(), [currentLoadouts[0].slice(), currentLoadouts[1].slice()], r.season, { windScale: r.wind, names: [null, r.name] });
+  menuOpen = false;
+}
+
+// The match on screen has ended: count it once
+function resolveLadder() {
+  if (!ladderMode || game.phase !== "over" || ladderResolvedSeed === game.seed) return;
+  ladderResolvedSeed = game.seed;
+  ladderOutcome = ladder.finish(game.tanks[0].score, game.tanks[1].score);
+  saveLadder();
+}
+
+function ladderMessage() {
+  const n = LADDER_RUNGS.length;
+  switch (ladderOutcome) {
+    case "advance": return { text: "MATCH " + (ladderMatchRung + 1) + "/" + n + " CLEARED - NEXT: " + ladder.current.name.toUpperCase(), button: "Next match" };
+    case "champion": return { text: "LADDER CLEARED - YOU ARE THE CHAMPION!", button: "Ladder" };
+    case "retry": return { text: "YOU LOST - " + ladder.continues + " CONTINUE" + (ladder.continues === 1 ? "" : "S") + " LEFT", button: "Retry match" };
+    case "failed": return { text: "OUT OF CONTINUES - THE LADDER STARTS OVER", button: "Start over" };
+    default: return { text: "A DRAW - PLAY IT AGAIN", button: "Rematch" };
+  }
+}
+
+// What the main button on the battle report (or the N key) does on the ladder
+function ladderPrimary() {
+  switch (ladderOutcome) {
+    case "retry": case "draw": ladderNewMatch(); break;
+    case "failed": showLadder("The ladder starts over. Beat all " + LADDER_RUNGS.length + " opponents to win."); break;
+    default: showLadder();
+  }
+}
+
+document.getElementById("ladderBtn").addEventListener("click", () => showLadder());
+updateLadderButton();
+ladderFight.addEventListener("click", () => {
+  if (ladder.done) { ladder.restart(); saveLadder(); renderLadder(); return; }
+  ladderNewMatch();
+});
+document.getElementById("ladderBack").addEventListener("click", showMenu);
 
 // ---- The game loop: physics in fixed steps, drawing every frame -------
 let last = performance.now();
@@ -975,6 +1103,7 @@ function frame(now) {
     leftover -= STEP;
   }
   Sound.observe(game, menuOpen || draftOpen);
+  resolveLadder();
   updateStatsOverlay(now);
   syncControls();
   draw();
