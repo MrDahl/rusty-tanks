@@ -19,48 +19,33 @@ COLS = 8
 INSET = 12                         # pixels cut away inside the frame (removes the neon outline)
 
 # Frame positions on each sheet: columns (left, right) and rows (top, bottom), found by looking for the neon outlines.
-OLD_COLS = [(110, 578), (681, 1148), (1252, 1719), (1822, 2289)]
-OLD_ROWS = [(74, 383), (506, 812), (933, 1241), (1360, 1668)]
-NEW_COLS = [(13, 356), (373, 716), (734, 1078), (1095, 1438)]
+COLS_A = [(13, 356), (373, 716), (734, 1078), (1095, 1438)]
 SHEETS = {
-    "s1": ("sheet1.jpg", OLD_COLS, OLD_ROWS),
-    "s2": ("sheet2.jpg", OLD_COLS, OLD_ROWS),
-    "s3": ("sheet3.jpg", OLD_COLS, OLD_ROWS),
-    "shells": ("sheet4_shells.png", NEW_COLS, [(15, 255), (272, 521), (536, 783), (799, 1062)]),
-    "ground": ("sheet5_ground.png", NEW_COLS, [(15, 261), (276, 524), (539, 768), (783, 1055)]),
+    "shells": ("sheet4_shells.png", COLS_A, [(15, 255), (272, 521), (536, 783), (799, 1062)]),
+    "ground": ("sheet5_ground.png", COLS_A, [(15, 261), (276, 524), (539, 768), (783, 1055)]),
+    "forces": ("sheet6_forces.png", COLS_A, [(17, 253), (271, 518), (534, 768), (782, 1047)]),
+    "fireground": ("sheet7_fire_ground.png", COLS_A, [(13, 257), (273, 522), (536, 769), (783, 1057)]),
 }
 
-# What is on each sheet, in reading order (row by row, left to right)
+# What is on each sheet, in reading order (row by row, left to right). Icons that are used for a weapon carry the weapon's name.
 CONTENT = {
-    "s1": ["Tsunami", "Magma Flow", "Geyser", "Plasma Ball", "Gravity Well", "Tornado", "Photon Rain", "Heli-Bomb",
-           "Rock Drill", "Vulcan", "Acid Blast", "Fireball", "Teleport", "Shield", "Meteor", "Doomsday"],
-    "s2": ["Laser", "Shockwave", "Cluster Bomb", "Lightning", "Bouncer", "Black Hole", "Ghost Shot", "Ice Spikes",
-           "Swarm", "Mud Bomb", "Railgun", "Reflector", "Dirt Bomb", "Orbital Beam", "Spider Bomb", "EMP Blast"],
-    "s3": ["Single", "Big Shot", "Burrower", "Acid Rain", "Splitter", "Roller", "Dirt Mover", "Digger",
-           "Volcano", "Sniper", "Tracer", "Napalm", "Seismic", "Homing", "Barrier", "Nuke"],
     "shells": ["Scatter Nuts", "Pogo Bomb", "Triple Rivet", "Fan of Five", "Proximity Pod", "Ticker", "Wrecker", "Anvil",
                "Crusher Drop", "Fuse Line", "Chain Rattler", "Wobble Shot", "Rocket Hop", "Mystery Crate", "Firework Rocket", "Dirty Bomb"],
-    "ground": ["Post Hole", "Earth Eater", "Scrap Wall", "Avalanche", "Spire", "Triple Mound", "Landfill", "Trench Digger",
+    "ground": ["Post Hole", "Earth Eater (round bite)", "Scrap Wall", "Avalanche", "Spire", "Triple Mound", "Landfill", "Trench Digger",
                "Diamond Cutter", "Star Quarry", "Cube Cutter", "Funnel Shell", "Ragged Quarry", "Bowl Maker", "Moat Maker", "Cryo Bomb"],
+    "forces": ["Rivet Shot", "Big Bolt", "Rapid Rivets", "Needle Gun", "Magnet Dart", "Hornet Swarm", "Twin Splitter", "Shrapnel Pod",
+               "Ricochet Rivet", "Rolling Barrel", "Warp Hop", "Gale Cannon", "Gravity Well", "Arc Lamp", "Hail of Slag", "Seismic Slam"],
+    "fireground": ["Burrower", "Silo Drill", "Tunneler", "Slag Heap", "Sludge Bomb", "Mud Pie", "Frost Shell", "Napalm Shell",
+                   "Fire Bomb", "Lava Glob", "Ember Rain", "Nuclear Warhead", "EMP Pulse", "Earth Eater (jagged bite)", "Earth Eater", "Earth Eater (vacuum)"],
 }
 
 # Weapon name -> (sheet, icon name on that sheet).  A weapon that has no entry gets a plain placeholder.
-MAP = {
-    "Rivet Shot": ("s3", "Single"), "Big Bolt": ("s3", "Big Shot"), "Burrower": ("s3", "Burrower"),
-    "Slag Heap": ("s2", "Dirt Bomb"), "Rapid Rivets": ("s1", "Vulcan"), "Magnet Dart": ("s3", "Homing"),
-    "Needle Gun": ("s3", "Sniper"), "Ricochet Rivet": ("s2", "Bouncer"), "Rolling Barrel": ("s3", "Roller"),
-    "Sludge Bomb": ("s3", "Dirt Mover"), "Shrapnel Pod": ("s2", "Cluster Bomb"), "Hail of Slag": ("s1", "Meteor"),
-    "Warp Hop": ("s1", "Teleport"), "Mud Pie": ("s2", "Mud Bomb"), "Silo Drill": ("s3", "Digger"),
-    "Tunneler": ("s1", "Rock Drill"), "Gale Cannon": ("s1", "Tornado"), "Gravity Well": ("s1", "Gravity Well"),
-    "Hornet Swarm": ("s2", "Swarm"), "Arc Lamp": ("s2", "Lightning"), "Twin Splitter": ("s3", "Splitter"),
-    "Seismic Slam": ("s3", "Seismic"), "Frost Shell": ("s2", "Ice Spikes"), "Napalm Shell": ("s3", "Napalm"),
-    "Fire Bomb": ("s1", "Fireball"), "Lava Glob": ("s1", "Magma Flow"), "Ember Rain": ("s3", "Volcano"),
-    "Nuclear Warhead": ("s3", "Nuke"), "EMP Pulse": ("s2", "EMP Blast"),
-}
-# The new sheets: the icon has the same name as the weapon
-for name in CONTENT["shells"]: MAP[name] = ("shells", name)
-for name in CONTENT["ground"]: MAP[name] = ("ground", name)
-MAP["Cryo Bomb"] = ("ground", "Cryo Bomb")
+# Every icon whose name is a weapon's name is used for that weapon. To use another icon, change its line here.
+MAP = {}
+for sheet, names in CONTENT.items():
+    for name in names:
+        if "(" not in name:
+            MAP[name] = (sheet, name)
 
 
 def weapon_names():

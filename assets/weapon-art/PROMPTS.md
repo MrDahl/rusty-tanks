@@ -1,4 +1,6 @@
-# Weapon art: what exists, what is still needed, and the prompts
+# Weapon art: the prompts and what was used
+
+**Status: all 61 weapons have an icon, all in the ChatGPT style.** The sheets in this folder are `sheet4_shells.png`, `sheet5_ground.png`, `sheet6_forces.png` and `sheet7_fire_ground.png`. The first round of sheets (Gemini, `sheet1-3`) and the reuse table below are history: those icons were replaced by round 2. Three Earth Eater versions are on sheet 7; the monster mouth is used, the other two (`Earth Eater (jagged bite)`, `(vacuum)`) and the first round bite on sheet 5 are spare.
 
 The weapon icons will be cut from sheets and packed into one `weapon-icons.png` (see the plan in the chat).
 Put the sheet images in this folder (`sheet1.jpg`, `sheet2.jpg`, `sheet3.jpg` = the first three, `sheet4.png`, `sheet5.png` = the new ones).

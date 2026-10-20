@@ -221,7 +221,7 @@
     .pickbox { padding: 4px 8px; }
     .pickbox h3 { margin: 0 0 2px; font-size: 11px; }
     .pickbox ol { columns: 2; column-gap: 12px; font-size: 12px; line-height: 1.35; padding-left: 26px; }
-    #weaponGrid { grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; flex: 1; align-content: start; }
+    #weaponGrid { grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; flex: 1; align-content: start; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #27457a transparent; }
     button.wcard { padding: 4px 6px; }
     button.wcard b { font-size: 9px; margin-bottom: 3px; }
     button.wcard span { font-size: 11px; line-height: 1.2; }
@@ -355,7 +355,7 @@
     body.mobile #seasonRow button.choice { font-size: 10px; padding: 8px 10px; min-width: 0; }
     body.mobile #draft { display: block; padding: 8px max(12px, env(safe-area-inset-left)) 0; }
     body.mobile #draft.hidden { display: none; }
-    body.mobile #weaponGrid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); flex: none; }
+    body.mobile #weaponGrid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); flex: none; overflow: visible; }
     body.mobile #draft > .row { position: sticky; bottom: 0; margin: 0 -12px; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); background: #0a1030; border-top: 2px solid #27457a; }
     body.mobile #draft > .row button { min-height: 42px; }
     body.mobile #ladder { justify-content: flex-start; overflow-y: auto; touch-action: pan-y; padding: 12px 14px max(14px, env(safe-area-inset-bottom)); }

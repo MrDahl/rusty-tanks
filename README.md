@@ -39,7 +39,7 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 
 ### Weapon icons
 
-Every weapon has an icon on the draft cards and next to the weapon list. All 61 icons are packed in one picture, `assets/weapon-icons.webp` (8 per row, in the same order as `weapons.js`), so the game loads one small file. The artwork sheets are kept in `assets/weapon-art/`, and `python3 tools/build_weapon_icons.py` cuts them up and rebuilds the picture (needs Pillow). To change an icon, replace the sheet or edit the `MAP` at the top of that script and run it again. A new weapon added at the end of `weapons.js` gets the next free spot in the picture. `assets/weapon-art/PROMPTS.md` has the image-generator prompts that were used.
+Every weapon has an icon on the draft cards and next to the weapon list. All 61 icons are packed in one picture, `assets/weapon-icons.webp` (8 per row, in the same order as `weapons.js`), so the game loads one small file. The artwork sheets (four 4x4 sheets, some spare icons left over) are kept in `assets/weapon-art/`, and `python3 tools/build_weapon_icons.py` cuts them up and rebuilds the picture (needs Pillow). To change an icon, replace the sheet or edit the `MAP` at the top of that script and run it again. A new weapon added at the end of `weapons.js` gets the next free spot in the picture. `assets/weapon-art/PROMPTS.md` has the image-generator prompts that were used.
 
 ### The Ladder
 
