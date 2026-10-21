@@ -8,6 +8,17 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="64x64" href="assets/icon-64.png">
+  <link rel="apple-touch-icon" href="assets/icon-180.png">
+  <meta name="description" content="Rusty Tanks: a neon artillery game. Aim, fire, mind the wind. Play free in your browser, on computer or phone.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Rusty Tanks">
+  <meta property="og:description" content="A neon artillery game with 61 weapons, weather, a ladder tournament and a computer opponent. Play free in your browser.">
+  <meta property="og:image" content="https://mrdahl.github.io/rusty-tanks/assets/social-preview.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preload" as="image" href="assets/rusty-tanks-title.webp">
   <link rel="preload" as="image" href="assets/weapon-icons.webp">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -244,6 +255,39 @@
     button.wcard span { grid-column: 1 / -1; grid-row: 2; }
     button.wcard em { grid-column: 1 / -1; grid-row: 3; }
 
+    /* Title screen: the logo drops in over the night-city battlefield */
+    #title {
+      position: absolute; inset: 0; z-index: 9; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; overflow: hidden; transition: opacity 0.5s ease; padding-bottom: 90px;
+      background: radial-gradient(ellipse at center, rgba(4, 6, 20, 0.25) 0%, rgba(4, 6, 20, 0.78) 100%);
+    }
+    #title.gone { opacity: 0; pointer-events: none; }
+    #game.titleOn #menu { display: none; }
+    #titleLogo {
+      width: min(96%, 1060px); max-height: 78%; object-fit: contain; mix-blend-mode: screen;
+      -webkit-mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 62%, transparent 100%); mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 62%, transparent 100%); user-select: none; -webkit-user-drag: none;
+      filter: drop-shadow(0 0 22px #ff7a3a77);
+      animation: titleDrop 1s cubic-bezier(0.2, 1.3, 0.4, 1) both, titleFloat 5s ease-in-out 1s infinite;
+    }
+    @keyframes titleDrop {
+      0% { opacity: 0; transform: scale(1.4) translateY(-50px); filter: brightness(4) blur(8px); }
+      55% { opacity: 1; filter: brightness(1.7) blur(0); }
+      100% { opacity: 1; transform: none; filter: drop-shadow(0 0 22px #ff7a3a77); }
+    }
+    @keyframes titleFloat { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-7px) scale(1.012); } }
+    #titlePress { margin: 4px 0 0; font-size: 13px; letter-spacing: 3px; color: #ffe066; text-shadow: 0 0 10px #ffb347; text-align: center; animation: pressBlink 1.2s steps(2, start) 1.3s infinite both; opacity: 0; }
+    @keyframes pressBlink { 0% { opacity: 1; } 50% { opacity: 0.15; } }
+    #titlePress .pt { display: none; }
+    body.mobile #titlePress .pk { display: none; }
+    body.mobile #titlePress .pt { display: inline; }
+    .ember { position: absolute; bottom: -12px; width: 4px; height: 4px; background: #ffb347; box-shadow: 0 0 8px #ff7a3a; opacity: 0; animation: emberRise 6s linear infinite; }
+    @keyframes emberRise {
+      0% { transform: translate(0, 0); opacity: 0; }
+      12% { opacity: 0.95; }
+      100% { transform: translate(var(--dx, 30px), -640px); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) { #titleLogo, .ember { animation: none; } #titlePress { animation: none; opacity: 1; } }
+
     /* The ladder */
     button.ladderbtn { background: #ffb347; color: #060a1a; box-shadow: 0 0 12px #ffb34799; }
     #ladder { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(4, 6, 20, 0.94); padding: 14px 40px; box-sizing: border-box; }
@@ -478,6 +522,11 @@
         <p class="keys mobileonly">Touch: hold &minus; / + to aim, or <b>drag on the battlefield</b> (sideways = angle, up/down = power). Hold &#9664; &#9654; to drive.</p>
         <p class="keys desktoponly">Keys: &larr; &rarr; angle &nbsp; &uarr; &darr; power (Shift = big steps) &nbsp; A / D drive &nbsp; 1-9 / 0 weapon &nbsp; Space fire<br>N rematch &nbsp; M music &nbsp; F fullscreen &nbsp; Esc menu &nbsp; (click once to switch the sound on)</p>
       </div>
+    </div>
+
+    <div id="title">
+      <img id="titleLogo" src="assets/rusty-tanks-title.webp" alt="Rusty Tanks" draggable="false">
+      <p id="titlePress"><span class="pk">PRESS ANY KEY OR CLICK TO START</span><span class="pt">TAP TO START</span></p>
     </div>
 
     <div id="ladder" class="hidden">

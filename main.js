@@ -1101,6 +1101,40 @@ ladderFight.addEventListener("click", () => {
 });
 document.getElementById("ladderBack").addEventListener("click", showMenu);
 
+// ---- Title screen: the logo drops in, any key / click / tap goes on to the menu (?title=0 skips it) ----
+const titleEl = document.getElementById("title");
+let titleOpen = new URLSearchParams(location.search).get("title") !== "0";
+if (!titleOpen) titleEl.style.display = "none";
+else {
+  gameFrame.classList.add("titleOn");
+  for (let i = 0; i < 26; i++) {     // glowing embers drifting up behind the logo
+    const e = document.createElement("span");
+    e.className = "ember";
+    e.style.left = Math.round(Math.random() * 100) + "%";
+    e.style.setProperty("--dx", Math.round(Math.random() * 120 - 60) + "px");
+    e.style.animationDuration = (4 + Math.random() * 5).toFixed(1) + "s";
+    e.style.animationDelay = (Math.random() * 6).toFixed(1) + "s";
+    if (Math.random() < 0.4) e.style.background = "#ffe066";
+    titleEl.appendChild(e);
+  }
+  setTimeout(() => { if (titleOpen) FX.shake = 12; }, 550);      // the logo lands with a thump
+}
+function closeTitle() {
+  if (!titleOpen) return;
+  titleOpen = false;
+  try { Sound.unlock(); } catch (e) { /* sound is optional */ }
+  titleEl.classList.add("gone");
+  gameFrame.classList.remove("titleOn");
+  setTimeout(() => { titleEl.style.display = "none"; }, 600);
+}
+titleEl.addEventListener("pointerdown", closeTitle);
+window.addEventListener("keydown", (e) => {     // runs first, so the key that closes the title does nothing else
+  if (!titleOpen) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  closeTitle();
+}, true);
+
 // ---- The game loop: physics in fixed steps, drawing every frame -------
 let last = performance.now();
 let leftover = 0;

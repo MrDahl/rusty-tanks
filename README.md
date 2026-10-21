@@ -55,7 +55,11 @@ Press **LADDER** on the menu for a five-match tournament against named computer 
 
 Win to climb. If you lose you may retry the match (you have 2 continues); after that the ladder starts over. A draw is simply replayed. Your progress is saved in the browser, and the menu button then says *Resume ladder*. The opponents and their worlds are one list at the top of `ladder.js`, so you can change them or add rungs.
 
-### Playing on a phone or tablet
+### Title screen and icons
+
+The game opens on a title screen: the Rusty Tanks logo drops in over the live night-city battlefield, with embers and a blinking "press any key". Add `?title=0` to the address to skip it. The same artwork is used as the share preview (`assets/social-preview.jpg`) and the app icon (`assets/icon-*.png`, used by the favicon, the home-screen icon and `manifest.json`). Sources are in `assets/weapon-art/`.
+
+## Playing on a phone or tablet
 
 On a touch screen the game switches to a touch layout by itself (add `?mobile=1` to the address to try it on a computer, `?mobile=0` to turn it off):
 
