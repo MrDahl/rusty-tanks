@@ -779,26 +779,40 @@ for (const b of stepButtons) {
   for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, stop);
 }
 
-// Drag on the battlefield to aim: sideways = angle, up / down = power
+// Drag on the battlefield to aim: the barrel points at your finger (or the held-down mouse),
+// and the farther the finger is from the tank, the more power. Firing stays on the FIRE button.
 {
-  const stageEl = document.getElementById("stage");
+  const POWER_REACH = 300;   // game pixels from the barrel pivot that mean 100 % power
   let drag = null;
-  stageEl.addEventListener("pointerdown", (e) => {
-    if (!document.body.classList.contains("mobile") || e.pointerType === "mouse") return;
-    if (menuOpen || draftOpen || game.phase !== "aim" || game.isAiTurn) return;
-    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, a: game.tank.angle, p: game.tank.power };
-    try { stageEl.setPointerCapture(e.pointerId); } catch (err) { /* fine */ }
-  });
-  stageEl.addEventListener("pointermove", (e) => {
-    if (!drag || e.pointerId !== drag.id) return;
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;   // finger distance in screen pixels
-    game.setAngle(drag.a - dx * 0.35);
-    game.setPower(drag.p - dy * 0.2);
+  canvas.style.touchAction = "none";
+  const aimAt = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const gx = ((e.clientX - r.left) / r.width) * canvas.width;
+    const gy = ((e.clientY - r.top) / r.height) * canvas.height;
+    const t = game.tank;
+    const dx = gx - t.x, dy = (t.y - BARREL_PIVOT) - gy;   // dy > 0 = finger above the barrel
+    let ang = (Math.atan2(dy, dx) * 180) / Math.PI;        // -180..180, 90 = straight up
+    if (ang < 0) ang = dx >= 0 ? 0 : 180;                   // below the horizon: lay the barrel flat
+    game.setAngle(Math.round(ang));
+    game.setPower(Math.round((Math.hypot(dx, dy) / POWER_REACH) * 100));
     syncControls();
+  };
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (titleOpen || menuOpen || draftOpen || game.phase !== "aim" || game.isAiTurn) return;
+    drag = e.pointerId;
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* fine */ }
+    e.preventDefault();
+    aimAt(e);
   });
-  const end = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
-  stageEl.addEventListener("pointerup", end);
-  stageEl.addEventListener("pointercancel", end);
+  canvas.addEventListener("pointermove", (e) => {
+    if (drag !== e.pointerId) return;       // a mouse that is not held down does nothing
+    if (game.phase !== "aim" || game.isAiTurn) { drag = null; return; }
+    aimAt(e);
+  });
+  const end = (e) => { if (drag === e.pointerId) drag = null; };   // values simply stay where they were
+  canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("pointercancel", end);
 }
 
 // Settings pop-up (the three-bar button)

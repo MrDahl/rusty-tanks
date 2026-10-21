@@ -64,7 +64,7 @@ The game opens on a title screen: the Rusty Tanks logo drops in over the live ni
 On a touch screen the game switches to a touch layout by itself (add `?mobile=1` to the address to try it on a computer, `?mobile=0` to turn it off):
 
 - The battlefield fills the screen and the controls float on top of it: **- / +** buttons for angle and power (tap for one step, hold to go faster), the weapon list, big **FIRE!** and hold-to-drive arrows.
-- You can also **drag on the battlefield** to aim: sideways changes the angle, up and down changes the power.
+- You can also **drag on the battlefield** to aim, with a finger or with the mouse (hold the button down): the barrel points at your finger, and the farther the finger is from the tank, the more power. The angle and power boxes follow along, and letting go leaves them where they were. Firing is still only the FIRE button.
 - The three-bar button opens the settings (aim guide, retro FX, sound, music, rematch, menu, fullscreen).
 - Tapping *Draft Battle* or *Quick Play* switches to fullscreen and locks the screen to landscape where the browser allows it. On iPhone, use Share, then *Add to Home Screen* to get a fullscreen app (there is a `manifest.json` for this). Landscape is best; portrait works too, with the controls stacked under the battlefield.
 - Frozen or EMP-locked controls are greyed out, just like on the desktop sliders.
