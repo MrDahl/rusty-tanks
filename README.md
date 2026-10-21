@@ -32,7 +32,7 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 - Dirt weapons (Mud Pie, Avalanche, Spire, Triple Mound, Landfill) can bury a tank. A buried tank cannot drive; it must dig itself out with its own weapons.
 - The night sky sometimes has a moon and semi-transparent drifting clouds that the moon shines through.
 
-- Sound: every sound is synthesized live in the browser (no sound files). Every weapon has its own launch sound, and each of the 16 explosion styles has its own boom. The music is a chiptune in the style of old keygen tracks (fast arpeggios, bouncy bass, pulse lead, noise drums): a calmer track for the menus and a hand-composed one for the battle (150 BPM, C minor with bright major lifts, four tracker channels with pulse-width-modulated lead, 40 bars that loop forever; see `playBattle` in `sound.js`). Click anywhere once to switch sound on; the Sound and Music boxes (or the M key) turn them off again.
+- Sound: every sound is synthesized live in the browser (no sound files). Every weapon has its own launch sound, and each of the 16 explosion styles has its own boom. The music is a chiptune in the style of old keygen tracks (fast arpeggios, bouncy bass, pulse lead, noise drums), and every weather has its own hand-composed song that gets more intense with the weather: Normal is calm and relaxed (104 BPM), Monsoon is rainy and melancholy (116), Ice Age is cold and glassy (126), Thunderstorm drives with thunder rumbles (138), Hurricane is the fast one (150) and Apocalypse is the end of the world (172 BPM: gallop kicks, rumble, a falling bomb and sirens). The menus have their own calm track. The notes are plain text in `songs.js`, played by a small tracker in `sound.js`. Click anywhere once to switch sound on; the Sound and Music boxes (or the M key) turn them off again.
 
 - When the match ends a **battle report** shows accuracy, damage, best shot, biggest crater, top weapon and more.
 - The game fills the whole window (no scrolling): the battlefield and the control panel (angle, power, weapon, FIRE, drive, switches) are one screen that scales to fit. Press F or the fullscreen button for true fullscreen.
@@ -78,7 +78,8 @@ Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = dr
 - `ladder.js`: the Ladder (the five opponents and the progress rules)
 - `game.js`: the rules (terrain, physics, wind, scoring, turns, computer opponent)
 - `fx.js`: the neon arcade effects (night city, rain, lightning, sparks, glowing shells, screen shake)
-- `sound.js`: synthesized sound effects and chiptune music (Web Audio)
+- `songs.js`: the six weather songs (notes, chords and instruments as data)
+- `sound.js`: synthesized sound effects and the tracker that plays the songs (Web Audio)
 - `main.js`: drawing, menus, weapon draft and controls
 
 ## Tests and balance

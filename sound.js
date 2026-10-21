@@ -645,132 +645,83 @@ const Sound = (function () {
   }
 
   // ---------------------------------------------------------------
-  //  The battle song: written by hand, 40 bars at 150 BPM, loops forever.
-  //  C minor with bright major chords: intro, tune A, tune B (the "euphoric" one), breakdown, A again, B again.
-  //  Four tracker channels: lead, arpeggio, bass and drums.
+  //  The weather songs (the notes live in songs.js): one tracker engine plays them all.
+  //  Four channels: lead, arpeggio, bass (+ pad) and drums.
   // ---------------------------------------------------------------
-  const NOTE_NUM = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-  // "G5-2 r-2 Bb5-4" = note + length in 16ths; r = rest. Every bar must add up to 16.
-  function tune(bars) {
-    return bars.map((str) => {
-      const row = new Array(16).fill(null);
-      let step = 0;
-      str.trim().split(/\s+/).forEach((tok) => {
-        const [name, len] = tok.split("-"), n = parseInt(len, 10);
-        if (name !== "r") {
-          const m = /^([A-G])([b#]?)(\d)$/.exec(name);
-          row[step] = { m: 12 * (parseInt(m[3], 10) + 1) + NOTE_NUM[m[1]] + (m[2] === "b" ? -1 : m[2] === "#" ? 1 : 0), len: n };
-        }
-        step += n;
-      });
-      if (step !== 16) throw new Error("tune bar is " + step + " steps: " + str);
-      return row;
-    });
-  }
-  const TUNE_A = tune([
-    "G5-2 G5-1 Bb5-1 C6-4 Bb5-2 G5-2 Eb5-2 r-2",   // Cm
-    "Ab5-2 Ab5-1 C6-1 Eb6-4 D6-2 C6-2 Ab5-2 r-2",   // Ab
-    "G5-2 G5-1 Bb5-1 Eb6-4 D6-2 Bb5-2 G5-2 r-2",    // Eb
-    "F5-2 F5-1 Bb5-1 D6-3 C6-1 Bb5-2 F5-2 D5-2 r-2", // Bb
-    "C6-2 C6-1 D6-1 Eb6-4 D6-2 C6-2 G5-2 r-2",      // Cm
-    "Eb6-2 D6-1 C6-1 Ab5-4 C6-2 Eb6-2 C6-2 r-2",    // Ab
-    "D6-2 D6-1 C6-1 Bb5-4 D6-2 F6-2 D6-2 r-2",      // Bb
-    "B5-2 D6-2 B5-2 G5-2 B5-2 D6-4 r-2",            // G (the major chord that pulls back to the start)
-  ]);
-  const TUNE_B = tune([
-    "C6-3 C6-1 Eb6-4 Eb6-2 D6-2 C6-4",              // Ab
-    "Bb5-3 Bb5-1 Eb6-4 G6-2 F6-2 Eb6-4",            // Eb
-    "D6-3 D6-1 F6-4 F6-2 Eb6-2 D6-4",               // Bb
-    "A5-3 A5-1 C6-4 F6-4 E6-2 C6-2",                // F (major: the happy lift)
-    "Eb6-2 Eb6-1 C6-1 Ab5-2 C6-2 Eb6-4 C6-4",       // Ab
-    "G6-2 G6-1 Eb6-1 Bb5-2 Eb6-2 G6-4 Eb6-4",       // Eb
-    "F6-2 Eb6-1 C6-1 Ab5-2 C6-2 F6-2 C6-2 Ab5-2 r-2", // Fm
-    "D6-2 B5-2 G5-2 B5-2 D6-2 G6-4 r-2",            // G
-  ]);
-  const PROG_BA = [[0, MIN], [8, MAJ], [3, MAJ], [10, MAJ], [0, MIN], [8, MAJ], [10, MAJ], [7, MAJ]];
-  const PROG_BB = [[8, MAJ], [3, MAJ], [10, MAJ], [5, MAJ], [8, MAJ], [3, MAJ], [5, MIN], [7, MAJ]];
-  const PROG_IN = [[0, MIN], [8, MAJ], [10, MAJ], [7, MAJ]];
-  // what every bar of the 40 is: [section kind, chord, melody bar or null]
-  const BATTLE_BARS = [];
-  (function () {
-    const add = (kind, prog, tuneRows) => prog.forEach((c, i) => BATTLE_BARS.push({ kind: kind, root: c[0], chord: c[1], lead: tuneRows ? tuneRows[i] : null, i: i, n: prog.length }));
-    add("intro", PROG_IN, null);
-    add("A", PROG_BA, TUNE_A);
-    add("B", PROG_BB, TUNE_B);
-    add("break", PROG_IN, null);
-    add("A2", PROG_BA, TUNE_A);
-    add("B2", PROG_BB, TUNE_B);
-  })();
-  const BATTLE_KEY = 48, BATTLE_BPM = 150;
-
-  function playBattle(step, t, bus) {
-    const dur = 60 / BATTLE_BPM / 4;
-    const bi = Math.floor(step / 16) % BATTLE_BARS.length, s = step % 16;
-    const B = BATTLE_BARS[bi], kind = B.kind, root = BATTLE_KEY + B.root, chord = B.chord;
-    const isB = kind === "B" || kind === "B2", isA = kind === "A" || kind === "A2";
-    const second = kind === "A2" || kind === "B2";
+  function playSong(song, step, t, bus) {
+    const dur = 60 / song.bpm / 4;
+    const bi = Math.floor(step / 16) % song.bars.length, s = step % 16;
+    const B = song.bars[bi], sec = B.sec, root = song.key + B.root, chord = B.chord;
     const echo = (g, a) => { const s2 = ctx.createGain(); s2.gain.value = a === undefined ? 0.35 : a; g.connect(s2); s2.connect(echoIn); };
+    const lastBar = B.i === B.n - 1;
 
-    // ---- channel 2: the cascading arpeggio, one note per 16th, ping-ponging left and right
-    {
-      const pat = isB ? [0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0, 2, 3, 4, 5, 3]
-        : kind === "break" ? [0, 1, 2, 3, 4, 5, 5, 4, 3, 2, 1, 0, 0, 1, 2, 3]
-        : [0, 1, 2, 3, 4, 3, 2, 1, 0, 1, 2, 3, 5, 4, 3, 2];
-      const vol = (kind === "intro" ? 0.085 : kind === "break" ? 0.1 : 0.1) * (kind === "intro" && B.i < 2 ? 0.8 : 1);
-      const g = channel(bus, vol, s % 2 === 0 ? -0.3 : 0.3);
+    // ---- the arpeggio: one note per tick, ping-ponging left and right
+    const A = sec.arp;
+    if (A && s % A.step === 0) {
+      const k = s / A.step;
+      const g = channel(bus, A.vol, k % 2 === 0 ? -0.3 : 0.3);
       echo(g, 0.3);
-      tone(g, { t, dur: dur * 0.9, f0: midi(root + chord[pat[s]] + 12), vol: 1, wave: pulse(isB ? 0.125 : kind === "break" ? 0.5 : 0.25), atk: 0.002 });
+      tone(g, { t, dur: dur * A.step * A.len, f0: midi(root + chord[A.pat[k % A.pat.length]] + (A.oct || 12)), vol: 1, wave: pulse(A.duty), atk: 0.002 });
     }
-    // ---- channel 3: the bouncing bass (triangle body + a little pulse for crunch)
-    if (kind !== "intro" || B.i >= 1) {
-      const hits = kind === "break" ? [0, 8] : (isB ? [0, 3, 6, 8, 11, 14] : [0, 2, 3, 6, 8, 10, 11, 14]);
-      if (hits.includes(s)) {
-        const oct = (s === 3 || s === 11 || s === 14) ? 12 : 0;
-        const g = channel(bus, 0.34, 0);
-        tone(g, { t, dur: dur * (kind === "break" ? 7 : 1.9), f0: midi(root - 12 + oct), vol: 1, type: "triangle", atk: 0.003 });
-        if (kind !== "break") tone(g, { t, dur: dur * 1.1, f0: midi(root - 12 + oct), vol: 0.4, wave: pulse(0.25), atk: 0.002 });
-      }
+    // ---- the bass: a triangle with a little pulse on top for crunch
+    const Bs = sec.bass;
+    if (Bs && B.i + (B.si === 0 ? 0 : 99) >= (Bs.from || 0) && Bs.hits.includes(s)) {
+      const oct = Bs.up.includes(s) ? 12 : 0;
+      const g = channel(bus, Bs.vol, 0);
+      tone(g, { t, dur: dur * Bs.len, f0: midi(root - 12 + oct), vol: 1, type: "triangle", atk: 0.003 });
+      if (Bs.crunch) tone(g, { t, dur: dur * Math.min(Bs.len, 1.2), f0: midi(root - 12 + oct), vol: Bs.crunch, wave: pulse(0.25), atk: 0.002 });
     }
-    // ---- channel 1: the lead
-    const note = B.lead ? B.lead[s] : null;
-    if (note) {
-      const g = channel(bus, 0.2, 0);
-      echo(g);
-      const ln = Math.max(dur * note.len * 0.92, dur);
-      const o = { t, dur: ln, f0: midi(note.m), vol: 1, atk: 0.004, vib: { rate: 5.5, cents: 12 } };
-      if (second || isB) { o.pwm = { duty: isB ? 0.45 : 0.35, depth: 0.28, rate: 1.7 }; o.vol = 0.9; }
-      else { o.wave = pulse(0.25); }
+    // ---- a soft pad under the calm songs
+    if (sec.pad && s === 0) {
+      const g = channel(bus, sec.pad, 0);
+      chord.slice(0, 3).forEach((c) => tone(g, { t, dur: dur * 15, f0: midi(root + c), vol: 1, type: "triangle", atk: 0.25 }));
+    }
+    // ---- the lead
+    const L = sec.lead, note = B.lead ? B.lead[s] : null;
+    if (L && note) {
+      const g = channel(bus, L.vol, 0);
+      echo(g, L.echo);
+      const o = { t, dur: Math.max(dur * note.len * 0.92, dur), f0: midi(note.m), vol: 1, atk: 0.004, vib: L.vib };
+      if (L.pwm) o.pwm = L.pwm; else o.wave = pulse(L.duty || 0.25);
       tone(g, o);
-      if (second) tone(g, { t, dur: Math.max(dur * note.len * 0.6, dur), f0: midi(note.m + 12), vol: 0.3, wave: pulse(0.125), atk: 0.004 });
+      const short = Math.max(dur * note.len * 0.6, dur);
+      if (L.octUp) tone(g, { t, dur: short, f0: midi(note.m + 12), vol: 0.3, wave: pulse(0.125), atk: 0.004 });
+      if (L.power) tone(g, { t, dur: Math.max(dur * note.len * 0.85, dur), f0: midi(note.m + 7), vol: 0.4, wave: pulse(0.25), atk: 0.004 });   // a power-chord fifth
     }
-    // ---- channel 4: drums
-    {
-      const d = channel(bus, 0.5, 0);
-      const full = kind !== "intro" && kind !== "break";
-      const kickOn = full ? (isB ? [0, 3, 4, 8, 10, 12] : [0, 4, 8, 10, 12]) : (kind === "intro" && B.i >= 2 ? [0, 8] : []);
-      if (kickOn.includes(s)) {
+    // ---- the drums
+    const D = sec.drums;
+    if (D) {
+      const d = channel(bus, D.vol, 0);
+      if (D.kick.includes(s) && B.i + (B.si === 0 ? 0 : 99) >= (D.kickFrom || 0)) {
         tone(d, { t, dur: 0.14, f0: 160, f1: 44, vol: 1.0 });
         noise(d, { t, dur: 0.02, type: "highpass", f0: 1500, vol: 0.3 });
       }
-      if (full && (s === 4 || s === 12)) {
+      if (D.snare.includes(s)) {
         noise(d, { t, dur: 0.14, type: "bandpass", f0: 2600, q: 0.8, vol: 0.55 });
         tone(d, { t, dur: 0.09, f0: 210, f1: 150, vol: 0.4, type: "triangle" });
       }
-      // crash at the start of each big section
-      if (s === 0 && B.i === 0 && kind !== "intro" && kind !== "break") {
-        noise(d, { t, dur: 0.9, type: "highpass", f0: 5200, vol: 0.28 });
-      }
-      // snare roll at the end of every fourth bar, and a big riser in the breakdown
-      if (full && (bi % 4 === 3) && s >= 12) noise(d, { t, dur: 0.07, type: "bandpass", f0: 2800, q: 0.8, vol: 0.3 + (s - 12) * 0.08 });
-      if (kind === "break" && B.i === 3) {
+      if (D.rim && D.rim.includes(s)) noise(d, { t, dur: 0.035, type: "bandpass", f0: 1800, q: 2, vol: 0.28 });
+      if (D.crash && s === 0 && B.i === 0) noise(d, { t, dur: 0.9, type: "highpass", f0: 5200, vol: 0.28 });
+      // snare roll at the end of every fourth bar
+      if (D.fill && (bi % 4 === 3) && s >= 12) noise(d, { t, dur: 0.07, type: "bandpass", f0: 2800, q: 0.8, vol: 0.3 + (s - 12) * 0.08 });
+      // the breakdown riser
+      if (D.riser && lastBar) {
         noise(d, { t, dur: dur * 1.2, type: "bandpass", f0: 600 + s * 420, q: 1.2, vol: 0.12 + s * 0.018 });
         if (s >= 8 && s % 2 === 0) noise(d, { t, dur: 0.07, type: "bandpass", f0: 2800, q: 0.8, vol: 0.25 + (s - 8) * 0.05 });
       }
-      // hi-hats: eighths in the intro, sixteenths with open hats in the big parts
-      const hatStep = full ? 2 : 4;
-      if (s % hatStep === 0 && !(kind === "break" && B.i === 3)) {
-        const open = full && s % 4 === 2;
-        noise(d, { t, dur: open ? 0.09 : 0.03, type: "highpass", f0: 7500, vol: open ? 0.22 : 0.16 });
+      // thunder: a crack and a long low rumble, every eight bars (and halfway)
+      if (D.thunder && s === 0 && bi % 4 === 2) {
+        noise(d, { t, dur: 0.12, type: "highpass", f0: 3000, vol: 0.4 });
+        noise(d, { t: t + 0.03, dur: 2.2, type: "lowpass", f0: 260, f1: 60, vol: 0.6, brown: true, atk: 0.05 });
+      }
+      // the apocalypse: a constant low rumble, a falling bomb before each eighth bar, and air-raid sirens in the quiet parts
+      if (D.rumble && s % 4 === 0) noise(d, { t, dur: dur * 4.5, type: "lowpass", f0: 110, vol: 0.4, brown: true, atk: 0.03 });
+      if (D.fall && lastBar && s === 8) tone(d, { t, dur: dur * 8, f0: 1900, f1: 70, vol: 0.28, wave: pulse(0.25) });
+      if (D.siren && s % 8 === 0) tone(d, { t, dur: dur * 8, f0: B.i % 2 ? 900 : 520, f1: B.i % 2 ? 520 : 900, vol: 0.09, type: "triangle", atk: 0.05 });
+      // hi-hats
+      if (D.hat && s % D.hat === 0 && !(D.riser && lastBar)) {
+        const open = D.open && s % 4 === 2;
+        noise(d, { t, dur: open ? 0.09 : 0.03, type: "highpass", f0: 7500, vol: (D.hatVol || 0.16) * (open ? 1.4 : 1) });
       }
     }
     return dur;
@@ -784,7 +735,7 @@ const Sound = (function () {
 
   // Schedules one 16th-note step of a song at time t on the destination bus
   function playStep(name, step, t, bus) {
-    if (name === "battle") return playBattle(step, t, bus);
+    if (SONGS.all[name]) return playSong(SONGS.all[name], step, t, bus);
     const song = songOf(name), P = song.profile;
     const dur = 60 / P.bpm / 4;
     const bar = Math.floor(step / 16) % 32, s = step % 16, sec = Math.floor(bar / 8), inSec = bar % 8;
@@ -911,7 +862,7 @@ const Sound = (function () {
   };
 
   function observe(game, inMenu) {
-    wantTrack = inMenu ? "menu" : "battle";
+    wantTrack = inMenu ? "menu" : (SONGS.all[game.weather] ? game.weather : "normal");
     if (!ctx) return;
     syncTrack();
     if (ctx.state !== "running") return;
@@ -1054,6 +1005,7 @@ const Sound = (function () {
     _launch(w, idx, x, t) { launchSound(w, idx, x, t); },
     _small: SMALL,
     _step: playStep,
+    _track() { return track ? track.name : null; },
     _styles: Object.keys(BOOM),
     _launches: Object.keys(LAUNCH),
     _clear() { voices = []; },
