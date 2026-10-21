@@ -32,7 +32,7 @@ Play it: https://mrdahl.github.io/rusty-tanks/
 - Dirt weapons (Mud Pie, Avalanche, Spire, Triple Mound, Landfill) can bury a tank. A buried tank cannot drive; it must dig itself out with its own weapons.
 - The night sky sometimes has a moon and semi-transparent drifting clouds that the moon shines through.
 
-- Sound: every sound is synthesized live in the browser (no sound files). Every weapon has its own launch sound, and each of the 16 explosion styles has its own boom. The music is a chiptune in the style of old keygen tracks (fast arpeggios, bouncy bass, pulse lead, noise drums): a calmer track for the menus and a faster one for the battle. Click anywhere once to switch sound on; the Sound and Music boxes (or the M key) turn them off again.
+- Sound: every sound is synthesized live in the browser (no sound files). Every weapon has its own launch sound, and each of the 16 explosion styles has its own boom. The music is a chiptune in the style of old keygen tracks (fast arpeggios, bouncy bass, pulse lead, noise drums): a calmer track for the menus and a hand-composed one for the battle (150 BPM, C minor with bright major lifts, four tracker channels with pulse-width-modulated lead, 40 bars that loop forever; see `playBattle` in `sound.js`). Click anywhere once to switch sound on; the Sound and Music boxes (or the M key) turn them off again.
 
 - When the match ends a **battle report** shows accuracy, damage, best shot, biggest crater, top weapon and more.
 - The game fills the whole window (no scrolling): the battlefield and the control panel (angle, power, weapon, FIRE, drive, switches) are one screen that scales to fit. Press F or the fullscreen button for true fullscreen.
