@@ -63,6 +63,17 @@ const DRILL_SPEED = 240; // how fast the Burrower digs (pixels per second)
 // amount of up to this fraction (applied to both angle and power).
 // Random means it can still get lucky, even on Easy.
 const AI_ERROR = { easy: 0.30, normal: 0.15, hard: 0.05 };
+// The computer's personalities (the ladder opponents use them). Numbers are multipliers:
+//  gain = how much it likes points from hits, self = how much it fears hurting itself, err = aiming error,
+//  likes = a rule that picks the weapons it loves (they count 1.3x or more)
+const AI_STYLES = {
+  sniper:    { gain: 1, self: 1.2, err: 0.5, boost: 1.25, likes: (w) => !(w.volley || w.line || w.scatter || w.rain || w.burst) && w.damage >= 40 },
+  bomber:    { gain: 1, self: 0.9, err: 1.0, boost: 1.3, likes: (w) => !!(w.line || w.scatter || w.rain || w.burst || w.blast >= 45) },
+  gambler:   { gain: 1, self: 0.4, err: 1.4, boost: 1.3, likes: (w) => w.damage >= 55 || !!w.nuke },
+  trickster: { gain: 1, self: 1.0, err: 1.0, boost: 1.6, likes: (w) => !!(w.freeze || w.emp || w.nuke || w.scramble || w.flames) },
+};
+const AI_NEUTRAL = { gain: 1, self: 1, err: 1, boost: 1, likes: () => false };
+const AI_KEEP = 0;          // how strongly the computer saves strong weapons for later (0 = not at all; tested: 0 scores most)
 const AI_THINK_TIME = 1.6; // seconds the computer "thinks" before firing
 
 // ---- Seeded random numbers (same seed = same map) --------------------
@@ -414,9 +425,13 @@ class Game {
     // opts always starts from the defaults, so a ladder match never leaks into a normal one
     this.windScale = opts && opts.windScale !== undefined ? opts.windScale : 1;
     this.names = opts && opts.names ? opts.names : null;
+    this.aiStyle = opts && opts.aiStyle ? opts.aiStyle : null;     // the computer's personality (see AI_STYLES), reset every match
     // If no new setting is given, keep the previous one
     this.ai = ai !== undefined ? ai : (this.ai || [null, null]);
     this.aiPlan = null;
+    this.aiEval = null;
+    this.aiPicked = null;
+    this.aiMoveIt = null;
     this.aiTimer = 0;
     this.seed = seed;
     this.rand = makeRng(seed);
@@ -1454,9 +1469,17 @@ class Game {
       this.aiPlan = { weapon: weapon, dir: 0, targetX: 0, shot: { angle: 90, power: 25, perfect: null }, timer: AI_THINK_TIME * 0.6 };
     }
     if (!this.aiPlan) {
-      const weapon = this.aiChooseWeapon();
+      // (comparing the weapons takes a moment, so it is done a few at a time over several frames)
+      if (this.aiPicked === null || this.aiPicked === undefined) {
+        const picked = this.aiChooseWeaponStep();
+        if (picked === null) return;
+        this.aiPicked = picked;
+      }
+      const weapon = this.aiPicked;
       t.weapon = weapon;
-      const move = this.aiDecideMove(weapon);
+      const move = this.aiDecideMoveStep(weapon);
+      if (move === undefined) return;
+      this.aiPicked = null;
       this.aiPlan = { weapon: weapon, dir: move ? move.dir : 0, targetX: move ? t.x + move.dir * move.dist : 0, shot: null, timer: 0 };
     }
     const plan = this.aiPlan;
@@ -1499,18 +1522,190 @@ class Game {
     return best >= 0 ? best : this.firstWeapon(this.current);
   }
 
-  // Which weapon the computer uses this turn: a random pick from the ones it owns and can aim.
-  aiChooseWeapon() {
+  // ---- How smart the computer is -------------------------------------------------
+  // It values a shot in points: what it would score on the enemy minus what it would lose itself,
+  // for the blast, the extra blasts (lines, scatter, rain, fragments), electric arcs, quakes and the
+  // status effects (freeze, EMP, fallout, fire). It looks at where the shell lands, not at how close it gets.
+  aiStyleOf() { return AI_STYLES[this.aiStyle] || AI_NEUTRAL; }
+
+  aiValue(w, ix, iy) {
+    const me = this.tank, foe = this.tanks[1 - this.current], S = this.aiStyleOf();
+    let gain = 0, loss = 0;
+    const hit = (cx, cy, blast, damage) => {
+      if (!(damage > 0)) return;
+      const reach = blast + TANK_RADIUS * 0.5;
+      let d = Math.hypot(cx - foe.x, cy - (foe.y - 8));
+      if (d <= reach) gain += Math.max(1, Math.round(damage * (1 - d / reach)));
+      d = Math.hypot(cx - me.x, cy - (me.y - 8));
+      if (d <= reach) loss += Math.max(1, Math.round(damage * (1 - d / reach)));
+    };
+    const near = (r, tank) => Math.hypot(ix - tank.x, iy - (tank.y - 8)) <= r;
+    let x = ix, y = iy;
+    // homing and proximity weapons are pulled toward the enemy
+    const pull = w.proximity ? w.proximity : w.homing ? w.homing.range * 0.4 : 0;
+    if (pull) {
+      const dx = foe.x - x, dy = (foe.y - 8) - y, d0 = Math.hypot(dx, dy);
+      if (d0 > 0) { const k = Math.min(d0, pull) / d0; x += dx * k; y += dy * k; }
+    }
+    hit(x, y, w.blast, w.damage);
+    if (w.volley) {   // the other shells of a volley: on top of each other (fan 0) or spread around
+      const extra = w.volley.fan === 0 ? 1 : 0.3;
+      gain *= 1 + (w.volley.count - 1) * extra; loss *= 1 + (w.volley.count - 1) * extra;
+    }
+    const B = w.burst || w.split;
+    if (B && B.damage) {
+      const spread = 130;
+      if (near(spread, foe)) gain += B.count * B.damage * 0.25;
+      if (near(spread * 0.6, me)) loss += B.count * B.damage * 0.25;
+    }
+    if (w.line) {
+      const L = w.line;
+      for (let k = 1; k <= L.count; k++) for (const side of [-1, 1]) {
+        const lx = x + side * k * L.spacing;
+        if (lx < 1 || lx >= W - 1) continue;
+        hit(lx, this.terrain.surfaceY(lx, Math.max(0, y - 50)) - 2, L.blast, L.damage);
+      }
+    }
+    if (w.scatter) {
+      const Sc = w.scatter;
+      // seven sample spots stand in for the random ones (the middle and a ring)
+      let g0 = gain, l0 = loss;
+      gain = 0; loss = 0;
+      for (let k = 0; k < 7; k++) {
+        const ang = k * (Math.PI / 3), r = k === 6 ? 0 : Sc.radius * 0.65;
+        hit(x + Math.cos(ang) * r, y + Math.sin(ang) * r, Sc.blast, Sc.damage);
+      }
+      gain = g0 + (gain / 7) * Sc.count; loss = l0 + (loss / 7) * Sc.count;
+    }
+    if (w.rain) {
+      const R = w.rain;
+      for (let i = 0; i < R.count; i++) {
+        const off = R.count > 1 ? (i / (R.count - 1) * 2 - 1) * R.spread : 0;
+        const rx = Math.max(1, Math.min(W - 2, x + off));
+        hit(rx, this.terrain.surfaceY(rx, 0) - 3, R.blast, R.damage);
+      }
+    }
+    if (w.arc && near(w.arc.range, foe)) gain += Math.max(5, Math.round(w.arc.damage * (1 - Math.hypot(ix - foe.x, iy - (foe.y - 8)) / w.arc.range)));
+    if (w.quake) {
+      const Q = w.quake;
+      if (Math.abs(foe.x - ix) <= Q.range) gain += Math.max(1, Math.round(Q.damage * (1 - Math.abs(foe.x - ix) / Q.range)));
+      if (Math.abs(me.x - ix) <= Q.range) loss += Math.max(1, Math.round(Q.damage * (1 - Math.abs(me.x - ix) / Q.range)));
+    }
+    // effects that are worth more than their points
+    if (w.freeze) { if (near(w.freeze.range, foe) && foe.status.frozen === 0) gain += FREEZE_BONUS + 8; if (near(w.freeze.range, me)) loss += FREEZE_BONUS; }
+    if (w.emp) { if (near(w.emp.range, foe) && foe.status.emp === 0) gain += FREEZE_BONUS + 8; if (near(w.emp.range, me)) loss += FREEZE_BONUS; }
+    if (w.nuke) {
+      const N = w.nuke, total = N.dmg * N.turns;
+      if (near(N.range, foe)) gain += total + 8;
+      if (near(N.range, me)) loss += total + 8;
+    }
+    if (w.flames && near(55, foe)) gain += Math.min(24, w.flames.count * w.flames.dps * w.flames.life * 0.18);
+    if (w.flames && near(45, me)) loss += Math.min(24, w.flames.count * w.flames.dps * w.flames.life * 0.18);
+    if (w.scramble && near(w.blast + TANK_RADIUS, foe)) gain += 8;
+    let v = gain * S.gain - loss * S.self;
+    if (S.likes(w) && v > 0) v *= S.boost;
+    return v;
+  }
+
+  // About how many points a weapon can win at best (used to save the strong ones for good chances)
+  aiNominal(w) {
+    let n = w.damage || 0;
+    if (w.volley) n *= 1 + (w.volley.count - 1) * (w.volley.fan === 0 ? 1 : 0.3);
+    if (w.line) n += w.line.count * w.line.damage * 0.8;
+    if (w.scatter) n += w.scatter.count * w.scatter.damage * 0.35;
+    if (w.rain) n += w.rain.count * w.rain.damage * 0.4;
+    if (w.burst) n += w.burst.count * w.burst.damage * 0.25;
+    if (w.arc) n += w.arc.damage;
+    if (w.quake) n += w.quake.damage;
+    if (w.nuke) n += w.nuke.dmg * w.nuke.turns;
+    if (w.freeze || w.emp) n += FREEZE_BONUS;
+    return n;
+  }
+
+  // The weapons the computer owns and can aim
+  aiPool() {
     const owned = [];
     WEAPON_LIST.forEach((w, i) => { if (this.hasAmmo(this.current, i)) owned.push(i); });
     const usable = owned.filter((i) => WEAPON_LIST[i].ai);
-    const pool = usable.length ? usable : owned;
+    return usable.length ? usable : owned;
+  }
+
+  // Where does a shot land, and what is it worth? (the same physics as the real thing)
+  aiShotValue(w, angle, power) {
+    const me = this.tank, mult = w.speed || 1;
+    const tip = this.barrelTip({ x: me.x, y: me.y, angle: angle });
+    const a = (angle * Math.PI) / 180, speed = power * SPEED_PER_POWER * mult;
+    const p = { x: tip.x, y: tip.y, vx: Math.cos(a) * speed, vy: -Math.sin(a) * speed, g: w.gravity, ws: w.windScale };
+    let result = "flying";
+    for (let i = 0; i < 900 && result === "flying"; i++) result = stepProjectile(p, STEP, this.wind, this.terrain, this.tanks);
+    return result === "out" ? -50 : this.aiValue(w, p.x, p.y);
+  }
+
+  // The average worth of a shot when the aim is a little off (the computer is never perfect): the middle plus eight nearby shots.
+  // This keeps it from relying on shots that only work to the pixel.
+  aiRobustValue(w, angle, power, err) {
+    if (!(err > 0)) return this.aiShotValue(w, angle, power);
+    const facingRight = angle <= 90, elev = facingRight ? angle : 180 - angle;
+    let sum = this.aiShotValue(w, angle, power), n = 1;
+    for (const da of [-1, 0, 1]) for (const dp of [-1, 0, 1]) {
+      if (!da && !dp) continue;
+      const e = Math.max(2, Math.min(88, elev * (1 + da * err)));
+      sum += this.aiShotValue(w, facingRight ? e : 180 - e, Math.max(5, Math.min(100, power * (1 + dp * err))));
+      n++;
+    }
+    return sum / n;
+  }
+
+  aiErrorSize() {
+    const d = this.ai[this.current];
+    return (AI_ERROR[d] !== undefined ? AI_ERROR[d] : AI_ERROR.normal) * this.aiStyleOf().err;
+  }
+
+  // How good is this weapon right now? (a quick search of all angles and powers)
+  aiEvalWeapon(i) {
+    const w = WEAPON_LIST[i];
+    const r = this.findBestShot(w, 4, this.tank.lock, (x, y) => this.aiValue(w, x, y), true);
+    r.value = Math.min(r.value, this.aiRobustValue(w, r.angle, r.power, this.aiErrorSize()));
+    // (Saving the strong weapons for later was tried and made the computer score less, so every weapon is simply rated by its value now.)
+    const keep = AI_KEEP * this.aiNominal(w) ;
+    return { i: i, value: r.value, score: r.value - keep };
+  }
+
+  // Pick from the evaluated weapons: normal usually takes one of the top three, hard the best
+  aiPickWeapon(evals) {
+    evals.sort((a, b) => b.score - a.score);
+    const diff = this.ai[this.current];
+    if (diff === "hard") return evals[0].i;
+    const r = this.rand();
+    return evals[Math.min(evals.length - 1, Math.floor(r * r * 3))].i;
+  }
+
+  // The same as aiChooseWeapon, but spread over several frames: returns null until it has decided
+  aiChooseWeaponStep() {
+    const diff = this.ai[this.current];
+    const pool = this.aiPool();
+    if (diff === "easy" || pool.length <= 1) return this.aiChooseWeapon();
+    if (!this.aiEval || this.aiEval.turn !== this.shotsFired[0] + this.shotsFired[1]) {
+      this.aiEval = { turn: this.shotsFired[0] + this.shotsFired[1], todo: pool.slice(), done: [] };
+    }
+    const E = this.aiEval;
+    for (let k = 0; k < 1 && E.todo.length; k++) E.done.push(this.aiEvalWeapon(E.todo.shift()));
+    if (E.todo.length) return null;
+    this.aiEval = null;
+    return this.aiPickWeapon(E.done);
+  }
+
+  // Which weapon the computer uses this turn. Easy: a random one it can aim. Normal and hard: the one with the best prospects.
+  aiChooseWeapon() {
+    const pool = this.aiPool();
     if (!pool.length) return 0;
-    return pool[Math.floor(this.rand() * pool.length)];
+    const diff = this.ai[this.current];
+    if (diff === "easy" || pool.length === 1 || this.tank.buried) return pool[Math.floor(this.rand() * pool.length)];
+    return this.aiPickWeapon(pool.map((i) => this.aiEvalWeapon(i)));
   }
 
   // Decide weapon-independent: if no good shot exists from here, look for a better spot within driving range
-  aiDecideMove(weaponIndex) {
+  *aiMoveGen(weaponIndex) {
     const difficulty = this.ai[this.current];
     if (this.weather === "monsoon" && this.tank.sink > 0) {   // stuck in the mud: wiggle free
       const toward = this.tanks[1 - this.current].x > this.tank.x ? 1 : -1;
@@ -1522,25 +1717,57 @@ class Game {
     const chance = difficulty === "easy" ? 0.4 : difficulty === "normal" ? 0.75 : 1;
     if (this.tank.lock.drive || this.moveLeft < 10 || this.rand() > chance) return null;
     const w = WEAPON_LIST[weaponIndex];
-    const here = this.findBestShot(w, 4);
-    if (here.miss < 25) return null;                 // already has a good shot
-
     const t = this.tank;
+    if (difficulty === "easy") {
+      const here = this.findBestShot(w, 4);
+      if (here.miss < 25) return null;                 // already has a good shot
+      let best = null;
+      for (const dir of [-1, 1]) {
+        for (const dist of [20, 40, 60]) {
+          const probe = this.probeDrive(dir, dist);
+          if (probe.moved < 8) continue;
+          const saved = { x: t.x, y: t.y };
+          t.x = probe.x; t.y = probe.y;
+          const r = this.findBestShot(w, 4);
+          t.x = saved.x; t.y = saved.y;
+          if (r.miss < (best ? best.miss : here.miss - 15)) best = { dir: dir, dist: probe.moved, miss: r.miss };
+          yield;
+        }
+      }
+      return best;
+    }
+    // Normal and hard: drive only if another spot gives clearly more points with this weapon
+    const vf = (x, y) => this.aiValue(w, x, y);
+    const here = this.findBestShot(w, 4, t.lock, vf, true);
     let best = null;
     for (const dir of [-1, 1]) {
       for (const dist of [20, 40, 60]) {
         const probe = this.probeDrive(dir, dist);
         if (probe.moved < 8) continue;
         const saved = { x: t.x, y: t.y };
-        t.x = probe.x;
-        t.y = probe.y;
-        const r = this.findBestShot(w, 4);
-        t.x = saved.x;
-        t.y = saved.y;
-        if (r.miss < (best ? best.miss : here.miss - 15)) best = { dir: dir, dist: probe.moved, miss: r.miss };
+        t.x = probe.x; t.y = probe.y;
+        const r = this.findBestShot(w, 4, t.lock, vf, true);
+        t.x = saved.x; t.y = saved.y;
+        if (r.value > (best ? best.value : here.value + Math.max(6, here.value * 0.2))) best = { dir: dir, dist: probe.moved, value: r.value };
+        yield;
       }
     }
     return best;
+  }
+
+  // The same, in one go (for tests) or a little at a time, one trial spot per frame (so the game never stutters)
+  aiDecideMove(weaponIndex) {
+    const it = this.aiMoveGen(weaponIndex);
+    let r;
+    while (!(r = it.next()).done);
+    return r.value;
+  }
+  aiDecideMoveStep(weaponIndex) {
+    if (!this.aiMoveIt) this.aiMoveIt = this.aiMoveGen(weaponIndex);
+    const r = this.aiMoveIt.next();
+    if (!r.done) return undefined;
+    this.aiMoveIt = null;
+    return r.value;
   }
 
   // Where would the tank end up if it drove? (Doesn't actually move it.)
@@ -1563,9 +1790,30 @@ class Game {
   planAiShot(weaponIndex) {
     if (weaponIndex === undefined) weaponIndex = this.aiChooseWeapon();
     const difficulty = this.ai[this.current];
-    const errorSize = AI_ERROR[difficulty] !== undefined ? AI_ERROR[difficulty] : AI_ERROR.normal;
+    const errorSize = (AI_ERROR[difficulty] !== undefined ? AI_ERROR[difficulty] : AI_ERROR.normal) * this.aiStyleOf().err;
 
-    const perfect = this.findBestShot(WEAPON_LIST[weaponIndex], undefined, this.tank.lock);
+    const w = WEAPON_LIST[weaponIndex];
+    const smart = difficulty !== "easy";   // normal and hard aim for points, easy just for the enemy tank
+    let perfect = this.findBestShot(w, undefined, this.tank.lock, smart ? (x, y) => this.aiValue(w, x, y) : undefined);
+    if (smart && perfect.value > 0) {
+      // slide from the sharpest shot to a sturdier one nearby: best average worth when the aim wobbles
+      const lock = this.tank.lock, e0 = errorSize;
+      let cur = { angle: perfect.angle, power: perfect.power, v: this.aiRobustValue(w, perfect.angle, perfect.power, e0) };
+      for (let it = 0; it < 8; it++) {
+        let bestN = null;
+        for (const da of [-2, 0, 2]) for (const dp of [-3, 0, 3]) {
+          if (!da && !dp) continue;
+          if ((da && lock.angle) || (dp && lock.power)) continue;
+          const an = cur.angle + da, po = cur.power + dp;
+          if (an < 0 || an > 180 || po < 5 || po > 100) continue;
+          const v = this.aiRobustValue(w, an, po, e0);
+          if (v > (bestN ? bestN.v : cur.v + 0.5)) bestN = { angle: an, power: po, v };
+        }
+        if (!bestN) break;
+        cur = bestN;
+      }
+      perfect = { angle: cur.angle, power: cur.power, miss: perfect.miss, value: cur.v };
+    }
 
     // Miscalculation: angle is measured as "how high the barrel points" (0-90),
     // so the same percentage works whether the enemy is to the left or right.
@@ -1596,7 +1844,9 @@ class Game {
   // Try lots of angle/power combinations using the real physics and keep
   // the one that lands closest to the enemy (without blowing up itself).
   // `coarse` = step size of the first sweep (smaller = more careful but slower).
-  findBestShot(w, coarse, locks) {
+  // valueFn(x, y) = points for landing at (x, y): when given, the search maximises points instead of minimising the miss distance.
+  // quick = a cheaper search (fewer refinements), used for comparing weapons.
+  findBestShot(w, coarse, locks, valueFn, quick) {
     if (typeof w === "number") w = { blast: w };        // old calling style: just a blast size
     coarse = coarse || 2;
     const me = this.tank;
@@ -1616,11 +1866,17 @@ class Game {
         result = stepProjectile(p, STEP, this.wind, this.terrain, this.tanks);
       }
       let miss = Math.hypot(p.x - targetX, p.y - targetY);
+      lastMiss = miss;
+      if (valueFn) {
+        lastValue = result === "out" ? -50 : valueFn(p.x, p.y);
+        return miss * 0.02 - lastValue;                          // points first; the miss distance only breaks ties
+      }
       if (result === "out") miss += 1000;                       // flew off the map
       const own = Math.hypot(p.x - me.x, p.y - (me.y - 8));
       if (own < risk) miss += 500;                              // would hurt itself
       return miss;
     };
+    let lastMiss = 0, lastValue = 0;
 
     // A frozen turret can't change its angle and an EMP-ed tank can't change its power: search only what is free
     const fa = locks && locks.angle ? me.angle : null;
@@ -1632,10 +1888,11 @@ class Game {
       return out;
     };
 
-    let best = { angle: 45, power: 50, miss: Infinity };
+    // (best.obj is what is being minimised: the miss distance, or minus the points)
+    let best = { angle: 45, power: 50, miss: Infinity, obj: Infinity, value: 0 };
     const tryShot = (angle, power) => {
-      const miss = score(angle, power);
-      if (miss < best.miss) best = { angle, power, miss };
+      const obj = score(angle, power);
+      if (obj < best.obj) best = { angle, power, miss: valueFn ? lastMiss : obj, obj: obj, value: lastValue };
     };
 
     // Three passes, each narrower than the last (about 3x cheaper than one fine sweep):
@@ -1646,27 +1903,28 @@ class Game {
     const step1 = coarse * 2;
     for (const angle of rng(5, 175, step1, fa)) {
       for (const power of rng(15, 100, step1, fp)) {
-        const miss = score(angle, power);
-        found.push({ angle, power, miss });
-        if (miss < best.miss) best = { angle, power, miss };
+        const obj = score(angle, power);
+        found.push({ angle, power, miss: obj });
+        if (obj < best.obj) best = { angle, power, miss: valueFn ? lastMiss : obj, obj: obj, value: lastValue };
       }
     }
     found.sort((a, b) => a.miss - b.miss);
     const seeds = [];
     for (const f of found) {              // the best few spots that are not right next to each other
-      if (seeds.length >= 4) break;
+      if (seeds.length >= (quick ? 3 : 4)) break;
       if (seeds.every((s) => Math.abs(s.angle - f.angle) > step1 || Math.abs(s.power - f.power) > step1)) seeds.push(f);
     }
+    const fine = quick ? 2 : 1;
     for (const sd of seeds) {
-      for (const angle of rng(sd.angle - step1, sd.angle + step1, 1, fa)) {
-        for (const power of rng(sd.power - step1, sd.power + step1, 1, fp)) {
+      for (const angle of rng(sd.angle - step1, sd.angle + step1, fine, fa)) {
+        for (const power of rng(sd.power - step1, sd.power + step1, fine, fp)) {
           if (angle >= 0 && angle <= 180 && power >= 5 && power <= 100) tryShot(angle, power);
         }
       }
     }
     const a0 = best.angle, p0 = best.power;
-    for (const angle of rng(a0 - 1, a0 + 1, 0.5, fa)) {
-      for (const power of rng(p0 - 1, p0 + 1, 0.5, fp)) {
+    for (const angle of rng(a0 - (quick ? 0 : 1), a0 + (quick ? 0 : 1), 0.5, fa)) {
+      for (const power of rng(p0 - (quick ? 0 : 1), p0 + (quick ? 0 : 1), 0.5, fp)) {
         if (angle >= 0 && angle <= 180 && power >= 5 && power <= 100) tryShot(angle, power);
       }
     }
@@ -1712,5 +1970,5 @@ function aiDraftPick(available, rand) {
 
 // Lets the test script load this file in Node (ignored in the browser)
 if (typeof module !== "undefined") {
-  module.exports = { Game, Terrain, aiDraftPick, SEASONS, inShape, WEAPONS: WEAPON_LIST, AI_ERROR, stepProjectile, makeRng, W, H, STEP, TANK_RADIUS, SHOTS_PER_PLAYER };
+  module.exports = { Game, Terrain, aiDraftPick, AI_STYLES, SEASONS, inShape, WEAPONS: WEAPON_LIST, AI_ERROR, stepProjectile, makeRng, W, H, STEP, TANK_RADIUS, SHOTS_PER_PLAYER };
 }

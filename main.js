@@ -1105,7 +1105,7 @@ function renderLadder(note) {
     const res = ladder.results[i];
     const state = cls === "done" ? "CLEARED" + (res ? "<br>" + res.you + " - " + res.cpu : "") : cls === "next" ? "NEXT" : "LOCKED";
     html += "<div class='rung " + cls + "'><div class='num'>" + (i + 1) + "</div><div class='who'><b>" + r.name.toUpperCase() + "</b><span>" +
-      capital(r.ai) + " computer &middot; " + SEASON_NAMES[r.season] + " &middot; " + WIND_WORDS[r.wind] + "</span></div><div class='state'>" + state + "</div></div>";
+      capital(r.ai) + (r.style ? " " + r.style : "") + " computer &middot; " + SEASON_NAMES[r.season] + " &middot; " + WIND_WORDS[r.wind] + "</span></div><div class='state'>" + state + "</div></div>";
   });
   document.getElementById("rungs").innerHTML = html;
   const sub = document.getElementById("ladderSub"), quip = document.getElementById("ladderQuip");
@@ -1140,7 +1140,7 @@ function ladderNewMatch() {
   menu.classList.add("hidden");
   statsEl.classList.add("hidden");
   currentLoadouts = randomLoadouts();
-  game.newMatch(Date.now(), aiSetting(), [currentLoadouts[0].slice(), currentLoadouts[1].slice()], r.season, { windScale: r.wind, names: [null, r.name] });
+  game.newMatch(Date.now(), aiSetting(), [currentLoadouts[0].slice(), currentLoadouts[1].slice()], r.season, { windScale: r.wind, names: [null, r.name], aiStyle: r.style });
   menuOpen = false;
 }
 

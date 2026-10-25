@@ -2,11 +2,11 @@
 // This file only holds the rules and the progress (no drawing), so it can be tested on its own.
 
 const LADDER_RUNGS = [
-  { name: "Rookie",    ai: "easy",   season: "normal",       wind: 0,   quip: "Fresh out of the scrapyard. Calm skies, no wind. Be gentle." },
-  { name: "Mudlark",   ai: "easy",   season: "monsoon",      wind: 0.5, quip: "Rain and mud. A tank that sits still sinks, so keep moving." },
-  { name: "Frostbite", ai: "normal", season: "iceage",       wind: 1,   quip: "Slippery ground and bouncy shells. Everything slides." },
-  { name: "Thunder",   ai: "hard",   season: "thunderstorm", wind: 1,   quip: "A sharp shooter, and lightning strikes every turn." },
-  { name: "Doomsday",  ai: "hard",   season: "apocalypse",   wind: 1.5, quip: "Meteors fall, the wind howls, and the computer does not miss." },
+  { name: "Rookie",    ai: "easy",   season: "normal",       wind: 0,   style: null,        quip: "Fresh out of the scrapyard. Calm skies, no wind. Be gentle." },
+  { name: "Mudlark",   ai: "easy",   season: "monsoon",      wind: 0.5, style: "gambler",   quip: "Rain and mud. A tank that sits still sinks, so keep moving." },
+  { name: "Frostbite", ai: "normal", season: "iceage",       wind: 1,   style: "trickster", quip: "Slippery ground and bouncy shells. Everything slides." },
+  { name: "Thunder",   ai: "hard",   season: "thunderstorm", wind: 1,   style: "sniper",    quip: "A sharp shooter, and lightning strikes every turn." },
+  { name: "Doomsday",  ai: "hard",   season: "apocalypse",   wind: 1.5, style: "bomber",    quip: "Meteors fall, the wind howls, and the computer does not miss." },
 ];
 const LADDER_CONTINUES = 2;      // how many lost matches you may retry before the ladder starts over
 

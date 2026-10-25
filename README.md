@@ -59,6 +59,18 @@ Win to climb. If you lose you may retry the match (you have 2 continues); after 
 
 The game opens on a title screen: the Rusty Tanks logo drops in over the live night-city battlefield, with embers and a blinking "press any key". Add `?title=0` to the address to skip it. The same artwork is used as the share preview (`assets/social-preview.jpg`) and the app icon (`assets/icon-*.png`, used by the favicon, the home-screen icon and `manifest.json`). Sources are in `assets/weapon-art/`.
 
+## SVG tanks (and how to go back)
+
+The tanks are vector art drawn in `tanksvg.js`: a rusty steel hull, a turret and a barrel that turns around the turret (the body flips when the tank faces left). Tick or untick **New tanks** in the settings to switch between them and the old pixel tanks, or add `?tanks=classic` to the address. The choice is remembered. To go back for good, the last commit before the SVG tanks is `0dee94b` (`git checkout 0dee94b`), and the old drawing code is still in `drawTank` in `main.js`.
+
+## Weapon icons in play
+
+While you aim, the chosen weapon's icon floats beside the tank (so you can see what the computer picked). When a shot is fired the icon pops up over the tank with the weapon's name. The battle report shows the icon next to Best shot, Most terrain destroyed and Top weapon.
+
+## The computer opponent
+
+Easy picks a random weapon and aims at the enemy tank. Normal and hard rate every weapon they own by the points it would win: the main blast, extra blasts (lines, scatter, rain, fragments), arcs, quakes, and the worth of freezing, EMP, fallout and fire, minus what it would cost itself. They pick the best weapon (normal picks among the top three), aim for the spot with the most points on average if their aim wobbles, and only drive when another spot is clearly better. In the Ladder every opponent also has a style: Mudlark is a gambler (loves big hits, careless about itself), Frostbite a trickster (freeze, EMP, fire, fallout), Thunder a sniper (precise single shots) and Doomsday a bomber (area weapons). The numbers live in `AI_STYLES` and `aiValue` in `game.js`; `tests/ai-smart.test.js` checks them.
+
 ## Playing on a phone or tablet
 
 On a touch screen the game switches to a touch layout by itself (add `?mobile=1` to the address to try it on a computer, `?mobile=0` to turn it off):
@@ -79,6 +91,7 @@ Keys: left/right = angle, up/down = power (hold Shift for big steps), A / D = dr
 - `game.js`: the rules (terrain, physics, wind, scoring, turns, computer opponent)
 - `fx.js`: the neon arcade effects (night city, rain, lightning, sparks, glowing shells, screen shake)
 - `songs.js`: the six weather songs (notes, chords and instruments as data)
+- `tanksvg.js`: the SVG tank pictures
 - `sound.js`: synthesized sound effects and the tracker that plays the songs (Web Audio)
 - `main.js`: drawing, menus, weapon draft and controls
 
