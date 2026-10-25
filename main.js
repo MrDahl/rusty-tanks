@@ -18,6 +18,12 @@ const newButton = document.getElementById("newgame");
 const guideBox = document.getElementById("guide");
 const weaponSelect = document.getElementById("weapon");
 const fxBox = document.getElementById("fx");
+const tanksBox = document.getElementById("tanks");   // "New tanks": the SVG tanks (unticked = the old pixel tanks)
+try {
+  const q = new URLSearchParams(location.search).get("tanks"), saved = localStorage.getItem("rustyTanksNew");
+  if (q === "classic" || (q === null && saved === "0")) tanksBox.checked = false;
+  tanksBox.addEventListener("change", () => { try { localStorage.setItem("rustyTanksNew", tanksBox.checked ? "1" : "0"); } catch (e) { /* not saved */ } });
+} catch (e) { /* default: new tanks */ }
 
 // Menu choices (what the player picked on the menu)
 const settings = { mode: "cpu", difficulty: "normal", season: "normal" };
@@ -219,6 +225,9 @@ function drawTank(t, index, active) {
 
   ctx.save();
   ctx.translate(x, y);
+  // the SVG tank (see tanksvg.js); while its pictures are still loading, or when "New tanks" is off, the classic pixel tank is drawn
+  const drawn = tanksBox.checked && TankArt.draw(ctx, index, t.angle, BARREL_PIVOT, color, active ? 16 : 8);
+  if (!drawn) {
   ctx.shadowColor = color;
   ctx.shadowBlur = active ? 18 : 10;
 
@@ -248,6 +257,7 @@ function drawTank(t, index, active) {
   ctx.fill();
   ctx.fillStyle = "#08102a";
   ctx.fillRect(-3, -15, 6, 2);
+  }
   ctx.restore();
 
   drawTankStatus(t, index, x, y);
@@ -408,6 +418,54 @@ function drawHud() {
   ctx.restore();
 }
 
+
+// ---- Weapon icons in play ------------------------------------------------
+// While aiming, the chosen weapon's icon floats next to the tank (so you can see what the computer picked);
+// when a shot is fired, the icon pops up bigger over the tank with the weapon's name and drifts away.
+const wiconImg = new Image();
+wiconImg.src = "assets/weapon-icons.webp";
+let cuePhase = "", fireCue = null;
+function drawIconBox(idx, cx, cy, w, color, alpha) {
+  if (!wiconImg.complete || !wiconImg.naturalWidth || idx < 0) return;
+  const h = Math.round(w * 2 / 3), x = Math.round(cx - w / 2), y = Math.round(cy - h / 2);
+  const cw = wiconImg.naturalWidth / WICON_COLS, ch = cw * 2 / 3;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = color; ctx.shadowBlur = 8;
+  ctx.fillStyle = "#0a0f24"; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+  ctx.shadowBlur = 0;
+  ctx.drawImage(wiconImg, (idx % WICON_COLS) * cw, Math.floor(idx / WICON_COLS) * ch, cw, ch, x, y, w, h);
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, h + 1);
+  ctx.restore();
+}
+function drawWeaponCues() {
+  if (game.phase === "flight" && cuePhase === "aim" && game.usedWeapon) {
+    const t = game.tank;
+    fireCue = { idx: WEAPON_LIST.indexOf(game.usedWeapon), name: game.usedWeapon.name, x: t.x, y: t.y, color: COLORS.tanks[game.current], t0: FX.time };
+  }
+  cuePhase = game.phase;
+  if (game.phase === "aim" && !menuOpen && !draftOpen && !titleOpen) {
+    game.tanks.forEach((t, i) => {
+      if (i !== game.current || t.buried) return;
+      const idx = t.weapon;
+      if (typeof idx === "number") drawIconBox(idx, t.x + 34, t.y - 60, 34, COLORS.tanks[i], 0.95);
+    });
+  }
+  if (fireCue) {
+    const age = FX.time - fireCue.t0;
+    if (age > 1.6) { fireCue = null; return; }
+    const pop = age < 0.18 ? 0.6 + (age / 0.18) * 0.5 : 1.1 - Math.min(0.1, (age - 0.18) * 0.2);
+    const a = age < 1.0 ? 1 : 1 - (age - 1.0) / 0.6;
+    const cx = fireCue.x, cy = fireCue.y - 74 - age * 14;
+    drawIconBox(fireCue.idx, cx, cy, Math.round(60 * pop), fireCue.color, a);
+    ctx.save();
+    ctx.globalAlpha = a; ctx.font = Math.round(9 * hudK) + "px " + FONT; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.shadowColor = fireCue.color; ctx.shadowBlur = 6; ctx.fillStyle = "#fff";
+    ctx.fillText(fireCue.name.toUpperCase(), Math.max(60, Math.min(W - 60, cx)), cy + 28 * pop);
+    ctx.restore();
+  }
+}
+
 function draw() {
   applyTheme();
   if (paintedVersion !== game.terrain.version) paintTerrain();
@@ -431,6 +489,7 @@ function draw() {
     }
   });
   drawAimGuide();
+  drawWeaponCues();
   FX.drawFlames(ctx, game.flames);
   FX.drawShells(ctx, game.projs);
   FX.drawExplosions(ctx, game);
@@ -972,6 +1031,12 @@ function weaponStars(st) {      // the weapon that won this player the most poin
   return best;
 }
 
+// A small weapon icon for the battle report (by weapon name)
+function reportIcon(name) {
+  const i = WEAPON_LIST.findIndex((w) => w.name === name);
+  return i < 0 ? "" : "<span class='wicon' style='--iw:34px;--col:" + (i % WICON_COLS) + ";--row:" + Math.floor(i / WICON_COLS) + "'></span>";
+}
+
 function renderStats() {
   const S = game.stats, T = game.tanks;
   const a = T[0].score, b = T[1].score;
@@ -991,11 +1056,11 @@ function renderStats() {
   add("Lost to own shots", S[0].self, S[1].self, lead(S[0].self, S[1].self, false));
   if (game.weather === "thunderstorm" || game.weather === "apocalypse") add("Lost to the storm", S[0].storm, S[1].storm, lead(S[0].storm, S[1].storm, false));
   const best = (i) => (S[i].best.gain > 0 ? "+" + S[i].best.gain : "-");
-  add("Best shot", best(0), best(1), lead(S[0].best.gain, S[1].best.gain, true), false, [S[0].best.weapon, S[1].best.weapon]);
+  add("Best shot", best(0), best(1), lead(S[0].best.gain, S[1].best.gain, true), false, [reportIcon(S[0].best.weapon) + S[0].best.weapon, reportIcon(S[1].best.weapon) + S[1].best.weapon]);
   const crater = (i) => (S[i].crater.px > 0 ? S[i].crater.px.toLocaleString("en-US") + " px" : "-");
-  add("Most terrain destroyed", crater(0), crater(1), lead(S[0].crater.px, S[1].crater.px, true), false, [S[0].crater.weapon, S[1].crater.weapon]);
+  add("Most terrain destroyed", crater(0), crater(1), lead(S[0].crater.px, S[1].crater.px, true), false, [reportIcon(S[0].crater.weapon) + S[0].crater.weapon, reportIcon(S[1].crater.weapon) + S[1].crater.weapon]);
   const star = [weaponStars(S[0]), weaponStars(S[1])];
-  add("Top weapon", star[0] ? star[0].name : "-", star[1] ? star[1].name : "-", [false, false], false,
+  add("Top weapon", star[0] ? reportIcon(star[0].name) + "<br>" + star[0].name : "-", star[1] ? reportIcon(star[1].name) + "<br>" + star[1].name : "-", [false, false], false,
       [star[0] ? "+" + star[0].points + " points" : "", star[1] ? "+" + star[1].points + " points" : ""]);
   const tricks = (i) => [S[i].buries ? S[i].buries + " buried" : "", S[i].freezes ? S[i].freezes + " frozen" : "", S[i].irradiated ? S[i].irradiated + " irradiated" : "", S[i].stunned ? S[i].stunned + " EMP" : ""].filter(Boolean).join(", ") || "-";
   add("Enemy tank hit by", tricks(0), tricks(1));

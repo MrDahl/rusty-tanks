@@ -323,6 +323,7 @@
     #statsTable td.lab { text-align: left; color: #9fc4ea; }
     #statsTable td.win { font-weight: bold; text-shadow: 0 0 8px currentColor; }
     #statsTable tr.big td { font-size: 20px; padding: 6px 10px; }
+    #statsTable .wicon { display: inline-block; vertical-align: middle; margin: 2px 6px 2px 0; }
     #statsTable td small { display: block; color: #7f9cc4; font-size: 11px; }
     #stats .row { margin-top: 14px; }
 
@@ -470,6 +471,7 @@
         <label class="drive">Drive <button id="driveL" class="secondary" title="Hold to drive left (A)">&#9664;</button><button id="driveR" class="secondary" title="Hold to drive right (D)">&#9654;</button></label>
         <div class="opts">
           <label><input id="guide" type="checkbox" checked> Aim guide</label>
+          <label><input id="tanks" type="checkbox" checked> New tanks</label>
           <label id="fxlabel"><input id="fx" type="checkbox" checked> Retro FX</label>
           <label><input id="sfx" type="checkbox" checked> Sound</label>
           <label><input id="music" type="checkbox" checked> Music</label>
@@ -573,6 +575,7 @@
   <script src="game.js"></script>
   <script src="ladder.js"></script>
   <script src="fx.js"></script>
+  <script src="tanksvg.js"></script>
   <script src="songs.js"></script>
   <script src="sound.js"></script>
   <script src="main.js"></script>
