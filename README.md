@@ -63,6 +63,10 @@ The game opens on a title screen: the Rusty Tanks logo drops in over the live ni
 
 The tanks are vector art drawn in `tanksvg.js`: a rusty steel hull, a turret and a barrel that turns around the turret (the body flips when the tank faces left). Tick or untick **New tanks** in the settings to switch between them and the old pixel tanks, or add `?tanks=classic` to the address. The choice is remembered. To go back for good, the last commit before the SVG tanks is `0dee94b` (`git checkout 0dee94b`), and the old drawing code is still in `drawTank` in `main.js`.
 
+## The aim guide gets shorter with the level
+
+The dotted aim guide only shows part of the first shell's path: **60 % on Easy, 30 % on Normal and 10 % on Hard** (2 Players counts as Normal). So you still get a hint, but never the whole way to the target. The shares are in `GUIDE_SHARE` in `main.js`.
+
 ## Weapon icons in play
 
 While you aim, the chosen weapon's icon floats beside the tank (so you can see what the computer picked). When a shot is fired the icon pops up over the tank with the weapon's name. The battle report shows the icon next to Best shot, Most terrain destroyed and Top weapon.
@@ -75,7 +79,7 @@ Easy picks a random weapon and aims at the enemy tank. Normal and hard rate ever
 
 On a touch screen the game switches to a touch layout by itself (add `?mobile=1` to the address to try it on a computer, `?mobile=0` to turn it off):
 
-- The battlefield fills the screen and the controls float on top of it: **- / +** buttons for angle and power (tap for one step, hold to go faster), the weapon list, big **FIRE!** and hold-to-drive arrows.
+- In landscape the battlefield sits above a strip of controls along the bottom, so the controls never cover the ground (tanks can sink to the very bottom edge when the dirt is blasted away). The strip holds: **- / +** buttons for angle and power (tap for one step, hold to go faster), the weapon list, big **FIRE!** and hold-to-drive arrows.
 - You can also **drag on the battlefield** to aim, with a finger or with the mouse (hold the button down): the barrel points at your finger, and the farther the finger is from the tank, the more power. The angle and power boxes follow along, and letting go leaves them where they were. Firing is still only the FIRE button.
 - The three-bar button opens the settings (aim guide, retro FX, sound, music, rematch, menu, fullscreen).
 - Tapping *Draft Battle* or *Quick Play* switches to fullscreen and locks the screen to landscape where the browser allows it. On iPhone, use Share, then *Add to Home Screen* to get a fullscreen app (there is a `manifest.json` for this). Landscape is best; portrait works too, with the controls stacked under the battlefield.

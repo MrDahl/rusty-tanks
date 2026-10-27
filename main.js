@@ -272,9 +272,22 @@ function drawTank(t, index, active) {
   }
 }
 
+// How much of the shot's path the aim guide shows: the harder the computer, the less you see
+const GUIDE_SHARE = { easy: 0.6, normal: 0.3, hard: 0.1 };
+function guideShare() {
+  const d = game.ai[1];                         // the chosen difficulty ("2 Players" mode counts as normal)
+  return GUIDE_SHARE[d] !== undefined ? GUIDE_SHARE[d] : GUIDE_SHARE.normal;
+}
+
+let guideCache = { key: "", path: [] };
 function drawAimGuide() {
   if (!guideBox.checked || game.phase !== "aim" || game.isAiTurn || menuOpen) return;
-  const pts = game.predictPath(140);
+  // (the whole flight, up to the first impact; remembered until something changes, as it is a long calculation)
+  const t = game.tank, key = [t.x, t.y, t.angle, t.power, t.weapon, game.wind, game.terrain.version, game.tanks[0].x, game.tanks[1].x].join("|");
+  if (guideCache.key !== key) guideCache = { key: key, path: game.predictPath(900) };
+  const all = guideCache.path;
+  const shown = Math.max(6, Math.round(all.length * guideShare()));
+  const pts = all.slice(0, shown);
   ctx.globalCompositeOperation = "lighter";
   for (let i = 4; i < pts.length; i += 5) {
     const k = 1 - (i / pts.length) * 0.6;
@@ -393,7 +406,7 @@ function drawHud() {
     if (game.tank.buried) neonText("BURIED IN DIRT - BLAST YOURSELF FREE", W / 2, 130, "#ffb060", 8, "center");
     else if (game.tank.sink > 0) neonText("STUCK IN THE MUD - DRIVE TO GET FREE", W / 2, 130, SEASON_COLORS.monsoon, 8, "center");
     else if (game.statusNote) neonText(game.statusNote, W / 2, 130, "#ffe066", 8, "center");
-    else if (!game.isAiTurn && guideBox.checked && guideIsApproximate(wp)) neonText("AIM GUIDE: FIRST SHELL, ROUGH PATH ONLY", W / 2, 130, COLORS.textDim, 8, "center");
+    else if (!game.isAiTurn && guideBox.checked && guideIsApproximate(wp)) neonText("AIM GUIDE: " + Math.round(guideShare() * 100) + "% OF THE PATH, FIRST SHELL ONLY", W / 2, 130, COLORS.textDim, 8, "center");
   } else if (game.lastHit && game.phase !== "over") {
     neonText(game.lastHit.toUpperCase(), W / 2, 76, NEON.amber, 13, "center");
   }
@@ -912,7 +925,9 @@ function fitGame() {
   document.body.classList.toggle("mobile", mobile);
   document.body.classList.toggle("portrait", mobile && portrait);
   if (mobile) {
-    const s = portrait ? window.innerWidth / 960 : Math.min(window.innerWidth / 960, window.innerHeight / 540);
+    // Landscape: the battlefield sits above a strip of controls (see --strip in the CSS), so nothing covers the ground
+    const strip = portrait ? 0 : 62 + (document.getElementById("safeProbe").offsetHeight || 0);
+    const s = portrait ? window.innerWidth / 960 : Math.min(window.innerWidth / 960, (window.innerHeight - strip) / 540);
     gameFrame.style.setProperty("--ms", s.toFixed(4));
     hudK = Math.max(1, Math.min(1.7, 0.78 / s));
   } else {

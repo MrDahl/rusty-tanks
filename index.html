@@ -413,6 +413,32 @@
     body.mobile #stats .row { margin-bottom: auto; }
     body.mobile #stats .row button { min-height: 42px; }
     /* portrait: the battlefield sits at the top, the controls are stacked in the free space below it */
+    /* Phone in landscape: the controls get their own strip along the bottom, and the battlefield sits above it.
+       That way nothing ever covers the ground, even when the dirt is blasted away down to the bottom edge. */
+    :root { --strip: 62px; }
+    #safeProbe { position: fixed; left: 0; bottom: 0; width: 1px; visibility: hidden; padding-bottom: env(safe-area-inset-bottom); pointer-events: none; }
+    body.mobile:not(.portrait) #stage { top: 0; transform: translate(-50%, 0) scale(var(--ms, 1)); transform-origin: top center; }
+    body.mobile:not(.portrait) #controls {
+      inset: auto 0 0 0; width: auto; height: calc(var(--strip) + env(safe-area-inset-bottom)); display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 8px;
+      padding: 0 max(8px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(8px, env(safe-area-inset-left));
+      background: linear-gradient(#0a1030, #060a1e); border-top: 2px solid #27457a;
+    }
+    body.mobile:not(.portrait) #touch { position: static; flex-direction: row; gap: 6px; order: 1; flex: none; }
+    body.mobile:not(.portrait) .trow .step { width: 40px; }
+    body.mobile:not(.portrait) .tv { width: 50px; }
+    body.mobile:not(.portrait) #mid { position: static; order: 2; flex: 1 1 0; min-width: 0; height: 50px; }
+    body.mobile:not(.portrait) #mid label.wsel { width: 0; flex: 1 1 0; min-width: 40px; max-width: 320px; }
+    body.mobile:not(.portrait) label.drive { position: static; order: 3; gap: 4px; }
+    body.mobile:not(.portrait) label.drive button { width: 50px; height: 48px; }
+    body.mobile:not(.portrait) #fire { position: static; order: 4; width: 84px; height: 48px; border-radius: 12px; font-size: 14px; flex: none; }
+    body.mobile:not(.portrait) .opts { bottom: calc(var(--strip) + env(safe-area-inset-bottom) + 8px); }
+    @media (max-width: 760px) and (orientation: landscape) {
+      body.mobile:not(.portrait) .trow .step { width: 38px; }
+      body.mobile:not(.portrait) .tv { width: 44px; }
+      body.mobile:not(.portrait) #wicon { display: none; }
+      body.mobile:not(.portrait) label.drive button { width: 44px; }
+      body.mobile:not(.portrait) #fire { width: 70px; font-size: 12px; }
+    }
     body.mobile.portrait #touch { flex-direction: row; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 100px); justify-content: space-between; }
     body.mobile.portrait .trow { flex: 1; justify-content: space-between; }
     body.mobile.portrait .trow .step { width: 42px; }
@@ -571,6 +597,7 @@
     </div>
   </div>
 
+  <div id="safeProbe"></div>
   <script src="weapons.js"></script>
   <script src="game.js"></script>
   <script src="ladder.js"></script>
